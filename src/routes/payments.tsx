@@ -42,13 +42,25 @@ function Donut() {
   );
 }
 
+const months = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
 function Payments() {
   const { invoices, deleteInvoice } = useAppContext();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [overviewMonth, setOverviewMonth] = useState("May");
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+
+  // Filter and pagination states
+  const [statusFilter, setStatusFilter] = useState("All Status");
+  const [targetDate, setTargetDate] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const handleEdit = (i: Invoice) => {
     setSelectedInvoice(i);
@@ -66,12 +78,40 @@ function Payments() {
   };
 
   const filteredInvoices = useMemo(() => {
-    if (!searchQuery) return invoices;
-    const q = searchQuery.toLowerCase();
-    return invoices.filter(
-      (i) => i.name.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || i.show.toLowerCase().includes(q)
-    );
-  }, [invoices, searchQuery]);
+    return invoices.filter((i) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !q || i.name.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || i.show.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === "All Status" || i.status === statusFilter;
+      
+      let matchesDate = true;
+      if (targetDate) {
+        try {
+          const iDate = new Date(i.date);
+          const fDate = new Date(targetDate);
+          matchesDate = iDate.getFullYear() === fDate.getFullYear() &&
+                        iDate.getMonth() === fDate.getMonth() &&
+                        iDate.getDate() === fDate.getDate();
+        } catch (err) {
+          matchesDate = false;
+        }
+      }
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [invoices, searchQuery, statusFilter, targetDate]);
+
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+  const paginatedInvoices = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredInvoices.slice(start, start + itemsPerPage);
+  }, [filteredInvoices, currentPage, itemsPerPage]);
+
+  const handleReset = () => {
+    setSearchQuery("");
+    setStatusFilter("All Status");
+    setTargetDate("");
+    setCurrentPage(1);
+    toast.info("Filters reset");
+  };
 
   return (
     <DashboardLayout
@@ -83,14 +123,16 @@ function Payments() {
             <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input 
               placeholder="Search invoices..." 
-              className="h-10 w-72 rounded-lg border border-border bg-card pl-9 pr-3 text-sm"
+              className="h-10 w-72 rounded-lg border border-border bg-card pl-9 pr-3 text-sm focus:outline-none"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
-          <button className="size-10 rounded-lg border border-border bg-card grid place-items-center"><Calendar className="size-4" /></button>
           <button 
-            className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2 hover:opacity-90" 
+            className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2 hover:opacity-90 cursor-pointer" 
             onClick={handleNew}
           >
             <Plus className="size-4" /> New Invoice
@@ -112,39 +154,66 @@ function Payments() {
               <button className="px-4 py-3 border-b-2 border-primary text-primary font-medium text-sm">Invoices</button>
               <button className="px-4 py-3 text-muted-foreground text-sm hover:text-foreground">Transactions</button>
             </div>
-            <div className="p-5 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-              <select className="h-10 rounded-lg border border-border bg-card px-3 text-sm"><option>All Status</option></select>
-              <select className="h-10 rounded-lg border border-border bg-card px-3 text-sm"><option>All Payment Methods</option></select>
-              <div><label className="text-xs text-muted-foreground">From Date</label><input placeholder="Select date" className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" /></div>
-              <div><label className="text-xs text-muted-foreground">To Date</label><input placeholder="Select date" className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" /></div>
+            {/* Consolidated 3-column filter row */}
+            <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="text-xs text-muted-foreground font-semibold">Status</label>
+                <select 
+                  className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="All Status">All Status</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Overdue">Overdue</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground font-semibold">Date</label>
+                <input 
+                  type="date"
+                  className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={targetDate}
+                  onChange={(e) => {
+                    setTargetDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
               <div className="flex gap-2">
-                <button className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5"><Filter className="size-4" /> Filter</button>
-                <button className="h-10 px-3 rounded-lg border border-border text-sm inline-flex items-center gap-1.5"><RotateCcw className="size-4" /> Reset</button>
+                <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer shadow-sm"><Filter className="size-4" /> Filter</button>
+                <button onClick={handleReset} className="h-10 px-3 rounded-lg border border-border text-sm inline-flex items-center gap-1.5 hover:bg-muted cursor-pointer transition-all"><RotateCcw className="size-4" /> Reset</button>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-muted-foreground">
                   <tr>
-                    <th className="p-4 text-left font-medium">Invoice ID</th>
-                    <th className="p-4 text-left font-medium">Guest / Client</th>
-                    <th className="p-4 text-left font-medium">Booking / Episode</th>
-                    <th className="p-4 text-left font-medium">Invoice Date</th>
-                    <th className="p-4 text-left font-medium">Due Date</th>
-                    <th className="p-4 text-left font-medium">Amount</th>
-                    <th className="p-4 text-left font-medium">Status</th>
-                    <th className="p-4 text-left font-medium">Actions</th>
+                    <th className="p-4 text-left font-semibold">Invoice ID</th>
+                    <th className="p-4 text-left font-semibold">Guest / Client</th>
+                    <th className="p-4 text-left font-semibold">Booking / Episode</th>
+                    <th className="p-4 text-left font-semibold">Invoice Date</th>
+                    <th className="p-4 text-left font-semibold">Due Date</th>
+                    <th className="p-4 text-left font-semibold">Amount</th>
+                    <th className="p-4 text-left font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                {filteredInvoices.map((i) => (
-                  <tr key={i.id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1 h-8 rounded ${i.bar}`} />
-                        <span className="font-medium text-primary">{i.id}</span>
-                      </div>
-                    </td>
+                {paginatedInvoices.map((i) => {
+                  let statusBorderClass = "border-l-4 border-l-transparent";
+                  if (i.status === "Paid") statusBorderClass = "border-l-4 border-l-success";
+                  else if (i.status === "Pending") statusBorderClass = "border-l-4 border-l-warning";
+                  else if (i.status === "Overdue") statusBorderClass = "border-l-4 border-l-destructive";
+
+                  return (
+                    <tr key={i.id} className="border-t border-border hover:bg-muted/30 transition-colors">
+                      <td className={`p-4 font-medium ${statusBorderClass}`}>
+                        <span className="font-medium text-primary ml-1">{i.id}</span>
+                      </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <img src={`https://i.pravatar.cc/64?img=${i.img}`} className="size-8 rounded-full" alt="" />
@@ -160,14 +229,13 @@ function Payments() {
                     </td>
                     <td className="p-4">{i.date}</td>
                     <td className="p-4">{i.due}</td>
-                    <td className="p-4 font-medium">{i.amount}</td>
+                    <td className="p-4 font-semibold text-foreground">{i.amount}</td>
                     <td className="p-4"><Badge variant={statusVariant[i.status]}>{i.status}</Badge></td>
                     <td className="p-4">
                       <div className="flex gap-1">
-                        <button className="size-8 rounded-md border border-border grid place-items-center text-info hover:bg-info/10 transition-colors" onClick={() => handleView(i)}><Eye className="size-4" /></button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-accent"><MoreVertical className="size-4" /></button>
+                            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-accent cursor-pointer"><MoreVertical className="size-4" /></button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleView(i)}><Eye className="mr-2 size-4" /> View Details</DropdownMenuItem>
@@ -186,8 +254,9 @@ function Payments() {
                         </DropdownMenu>
                       </div>
                     </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
                 </tbody>
               </table>
               {filteredInvoices.length === 0 && (
@@ -196,62 +265,65 @@ function Payments() {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-between p-4 text-sm border-t border-border">
-              <div className="text-muted-foreground">Showing {filteredInvoices.length} invoices</div>
+            {/* Repaired dynamic numerical footer navigation */}
+            <div className="flex items-center justify-between p-4 text-sm border-t border-border flex-wrap gap-2">
+              <div className="text-muted-foreground font-medium">
+                Showing {Math.min(filteredInvoices.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredInvoices.length, currentPage * itemsPerPage)} of {filteredInvoices.length} invoices
+              </div>
               <div className="flex items-center gap-1">
-                <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronsLeft className="size-4" /></button>
-                <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronLeft className="size-4" /></button>
-                <button className="size-8 rounded-md bg-primary text-primary-foreground">1</button>
-                <button className="size-8 rounded-md border border-border hover:bg-muted">2</button>
-                <button className="size-8 rounded-md border border-border hover:bg-muted">3</button>
-                <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronRight className="size-4" /></button>
-                <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronsRight className="size-4" /></button>
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronsLeft className="size-4" /></button>
+                <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronLeft className="size-4" /></button>
+                {Array.from({ length: totalPages || 1 }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    className={`size-8 rounded-md text-xs font-semibold cursor-pointer ${
+                      currentPage === p
+                        ? "bg-primary text-primary-foreground font-bold"
+                        : "border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages || totalPages === 0} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronRight className="size-4" /></button>
+                <button onClick={() => setCurrentPage(totalPages || 1)} disabled={currentPage === totalPages || totalPages === 0} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronsRight className="size-4" /></button>
               </div>
             </div>
           </div>
         </div>
 
         <div className="space-y-6">
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Payment Overview</h3>
-              <select className="text-xs border border-border rounded-md px-2 py-1 bg-card"><option>This Month</option></select>
+          {/* Un-crammed and expanded Payment Overview card layout */}
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-foreground text-sm">Payment Overview</h3>
+              <select
+                value={overviewMonth}
+                onChange={(e) => {
+                  setOverviewMonth(e.target.value);
+                  toast.info(`Showing Payment Overview for ${e.target.value}`);
+                }}
+                className="text-xs border border-border rounded-md px-2 py-1 bg-card cursor-pointer focus:outline-none"
+              >
+                {months.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="relative">
+            <div className="flex items-center gap-6 py-2 flex-wrap sm:flex-nowrap">
+              <div className="relative shrink-0">
                 <Donut />
                 <div className="absolute inset-0 grid place-items-center text-center">
                   <div>
-                    <div className="text-lg font-bold">₹1,45,000</div>
-                    <div className="text-[10px] text-muted-foreground">Total Revenue</div>
+                    <div className="text-base font-bold text-foreground">₹1,45,000</div>
+                    <div className="text-[9px] text-muted-foreground uppercase font-medium">Total Revenue</div>
                   </div>
                 </div>
               </div>
-              <div className="flex-1 space-y-2 text-xs">
-                <div className="flex items-center gap-2"><span className="size-2 rounded-full bg-success" /><span className="flex-1">Paid</span><span className="font-medium">₹1,10,000 (76%)</span></div>
-                <div className="flex items-center gap-2"><span className="size-2 rounded-full bg-warning" /><span className="flex-1">Pending</span><span className="font-medium">₹25,000 (17%)</span></div>
-                <div className="flex items-center gap-2"><span className="size-2 rounded-full bg-destructive" /><span className="flex-1">Overdue</span><span className="font-medium">₹10,000 (7%)</span></div>
+              <div className="flex-1 space-y-3 text-xs">
+                <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-success" />Paid</span><span className="font-bold text-foreground">₹1,10,000 (76%)</span></div>
+                <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-warning" />Pending</span><span className="font-bold text-foreground">₹25,000 (17%)</span></div>
+                <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-destructive" />Overdue</span><span className="font-bold text-foreground">₹10,000 (7%)</span></div>
               </div>
-            </div>
-          </div>
-
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Payment Methods</h3>
-              <select className="text-xs border border-border rounded-md px-2 py-1 bg-card"><option>This Month</option></select>
-            </div>
-            <div className="space-y-3 text-sm">
-              {[
-                { label: "UPI", amt: "₹70,000 (48%)", w: "48%", color: "bg-primary" },
-                { label: "Card", amt: "₹40,000 (28%)", w: "28%", color: "bg-info" },
-                { label: "Bank Transfer", amt: "₹25,000 (17%)", w: "17%", color: "bg-success" },
-                { label: "Cash", amt: "₹10,000 (7%)", w: "7%", color: "bg-warning" },
-              ].map((m) => (
-                <div key={m.label}>
-                  <div className="flex justify-between mb-1 text-xs"><span>{m.label}</span><span className="font-medium">{m.amt}</span></div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden"><div className={`h-full ${m.color}`} style={{ width: m.w }} /></div>
-                </div>
-              ))}
             </div>
           </div>
 

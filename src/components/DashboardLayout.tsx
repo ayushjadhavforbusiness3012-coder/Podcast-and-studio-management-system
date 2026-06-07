@@ -153,23 +153,25 @@ export function DashboardLayout({
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             {actions}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="relative size-10 rounded-lg border border-border bg-card grid place-items-center hover:bg-muted">
-                  <Bell className="size-4" />
-                  <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full size-4 grid place-items-center">5</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>New booking from Rahul Verma</DropdownMenuItem>
-                <DropdownMenuItem>Payment received: ₹6,000</DropdownMenuItem>
-                <DropdownMenuItem>Studio A maintenance scheduled</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-center text-primary justify-center">View all notifications</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {pathname === "/" && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="relative size-10 rounded-lg border border-border bg-card grid place-items-center hover:bg-muted">
+                    <Bell className="size-4" />
+                    <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full size-4 grid place-items-center">5</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>New booking from Rahul Verma</DropdownMenuItem>
+                  <DropdownMenuItem>Payment received: ₹6,000</DropdownMenuItem>
+                  <DropdownMenuItem>Studio A maintenance scheduled</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-center text-primary justify-center">View all notifications</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             <div className="flex items-center gap-3 pl-3 border-l border-border">
               <DropdownMenu>

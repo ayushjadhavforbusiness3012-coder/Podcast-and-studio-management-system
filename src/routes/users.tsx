@@ -18,6 +18,8 @@ function UsersPage() {
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   // Add user form state
   const [newName, setNewName] = useState("");
@@ -35,6 +37,12 @@ function UsersPage() {
         return matchesSearch && matchesRole && matchesStatus;
       });
   }, [users, searchQuery, roleFilter, statusFilter]);
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(start, start + itemsPerPage);
+  }, [filteredUsers, currentPage, itemsPerPage]);
 
   const handleToggleSelect = (idx: number) => {
     const next = new Set(selectedIdxs);
@@ -111,17 +119,23 @@ function UsersPage() {
             <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               placeholder="Search users by name, email..."
-              className="h-10 w-72 rounded-lg border border-border bg-card pl-9 pr-3 text-sm"
+              className="h-10 w-72 rounded-lg border border-border bg-card pl-9 pr-3 text-sm focus:outline-none"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
+          <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5 hover:opacity-90 transition-all cursor-pointer shadow-sm">
+            <Filter className="size-4" /> Filter
+          </button>
           {selectedIdxs.size > 0 && (
             <button onClick={handleDeleteSelected} className="h-10 px-4 rounded-lg border border-destructive/30 text-destructive bg-destructive/10 text-sm font-medium inline-flex items-center gap-2">
               <Trash2 className="size-4" /> Delete ({selectedIdxs.size})
             </button>
           )}
-          <button onClick={() => setShowAddDialog(true)} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2">
+          <button onClick={() => setShowAddDialog(true)} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2 shadow-sm">
             <Plus className="size-4" /> Add User
           </button>
         </>
@@ -192,16 +206,21 @@ function UsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((u) => (
-                    <tr key={u._idx} className={`border-t border-border transition-colors ${selectedIdxs.has(u._idx) ? "bg-primary/5" : "hover:bg-muted/30"}`}>
-                      <td className="p-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedIdxs.has(u._idx)}
-                          onChange={() => handleToggleSelect(u._idx)}
-                          className="size-4 rounded border-border"
-                        />
-                      </td>
+                  {paginatedUsers.map((u) => {
+                    let statusBorderClass = "border-l-4 border-l-transparent";
+                    if (u.status === "Active") statusBorderClass = "border-l-4 border-l-success";
+                    else if (u.status === "Inactive") statusBorderClass = "border-l-4 border-l-destructive";
+
+                    return (
+                      <tr key={u._idx} className={`border-t border-border transition-colors ${selectedIdxs.has(u._idx) ? "bg-primary/5" : "hover:bg-muted/30"}`}>
+                        <td className={`p-4 ${statusBorderClass}`}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIdxs.has(u._idx)}
+                            onChange={() => handleToggleSelect(u._idx)}
+                            className="size-4 rounded border-border ml-1"
+                          />
+                        </td>
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <img src={`https://i.pravatar.cc/64?img=${u.img}`} className="size-9 rounded-full" alt="" />
@@ -242,16 +261,48 @@ function UsersPage() {
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {filteredUsers.length === 0 && (
                 <div className="p-8 text-center text-muted-foreground">No users found matching your filters.</div>
               )}
             </div>
-            <div className="flex items-center justify-between p-4 text-sm border-t border-border">
-              <div className="text-muted-foreground">Showing {filteredUsers.length} of {users.length} users</div>
+             <div className="flex items-center justify-between p-4 text-sm border-t border-border flex-wrap gap-2">
+              <div className="text-muted-foreground font-medium">
+                Showing {Math.min(filteredUsers.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredUsers.length, currentPage * itemsPerPage)} of {filteredUsers.length} users
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                {Array.from({ length: totalPages || 1 }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    className={`size-8 rounded-md text-xs font-semibold transition-all ${
+                      currentPage === p
+                        ? "bg-primary text-primary-foreground font-bold"
+                        : "border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -38,8 +38,27 @@ export function GuestFormDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email) {
-      toast.error("Please fill in required fields.");
+    if (!name.trim() || !email.trim()) {
+      toast.error("Name and Email are required fields.");
+      return;
+    }
+
+    // Alphanumeric checks to prevent raw numerical values in Name
+    if (/^\d+$/.test(name.trim())) {
+      toast.error("Guest Name cannot be a raw numerical value.");
+      return;
+    }
+
+    // Email format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+
+    // Phone format check (must not contain letters)
+    if (phone.trim() && /[a-zA-Z]/.test(phone)) {
+      toast.error("Phone number cannot contain alphabetical characters.");
       return;
     }
 

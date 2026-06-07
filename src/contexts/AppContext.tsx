@@ -10,6 +10,7 @@ export type Booking = {
   status: "Confirmed" | "Pending" | "Cancelled" | "Completed";
   sv: "success" | "warning" | "destructive" | "primary" | "default";
   amt: string;
+  duration?: number;
 };
 
 export type User = {
@@ -182,6 +183,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [packages, setPackages] = useState<Package[]>(initialPackages);
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [searchQuery, setSearchQuery] = useState("");
+  const [nextBookingId, setNextBookingId] = useState(1025);
 
   const addInvoice = (i: Omit<Invoice, "id" | "bar" | "img">) => {
     const newId = `INV-${1009 + invoices.length}`;
@@ -281,7 +283,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addBooking = (b: Omit<Booking, "id" | "sv">) => {
-    const newId = `BK-${1025 + bookings.length}`;
+    const newId = `BK-${nextBookingId}`;
+    setNextBookingId((prev) => prev + 1);
     
     let sv: Booking["sv"] = "default";
     if (b.status === "Confirmed") sv = "success";

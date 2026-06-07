@@ -28,6 +28,9 @@ function Episodes() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState("All Shows");
   const [statusFilter, setStatusFilter] = useState("All Status");
+  const [publishedDateFilter, setPublishedDateFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const handleEdit = (e: Episode) => {
     setSelectedEpisode(e);
@@ -48,6 +51,8 @@ function Episodes() {
     setSearchQuery("");
     setShowFilter("All Shows");
     setStatusFilter("All Status");
+    setPublishedDateFilter("");
+    setCurrentPage(1);
     toast.info("Filters reset");
   };
 
@@ -57,9 +62,28 @@ function Episodes() {
       const matchesSearch = !q || e.title.toLowerCase().includes(q) || e.guest.toLowerCase().includes(q);
       const matchesShow = showFilter === "All Shows" || e.show === showFilter;
       const matchesStatus = statusFilter === "All Status" || e.status === statusFilter;
-      return matchesSearch && matchesShow && matchesStatus;
+      
+      let matchesDate = true;
+      if (publishedDateFilter) {
+        try {
+          const eDate = new Date(e.date);
+          const fDate = new Date(publishedDateFilter);
+          matchesDate = eDate.getFullYear() === fDate.getFullYear() &&
+                        eDate.getMonth() === fDate.getMonth() &&
+                        eDate.getDate() === fDate.getDate();
+        } catch (err) {
+          matchesDate = false;
+        }
+      }
+      return matchesSearch && matchesShow && matchesStatus && matchesDate;
     });
-  }, [episodes, searchQuery, showFilter, statusFilter]);
+  }, [episodes, searchQuery, showFilter, statusFilter, publishedDateFilter]);
+
+  const totalPages = Math.ceil(filteredEpisodes.length / itemsPerPage);
+  const paginatedEpisodes = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredEpisodes.slice(start, start + itemsPerPage);
+  }, [filteredEpisodes, currentPage, itemsPerPage]);
 
   // Unique shows for dropdown
   const shows = ["All Shows", ...new Set(episodes.map(e => e.show))];
@@ -70,15 +94,6 @@ function Episodes() {
       subtitle="Create, manage and organize all podcast episodes"
       actions={
         <>
-          <div className="relative hidden md:block">
-            <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              placeholder="Search episodes..." 
-              className="h-10 w-64 rounded-lg border border-border bg-card pl-9 pr-3 text-sm" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
           <button onClick={handleNew} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2 hover:opacity-90">
             <Plus className="size-4" /> Add New Episode
           </button>
@@ -129,23 +144,29 @@ function Episodes() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Published Date</label>
-            <select className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm">
-              <option>All Time</option>
-            </select>
+            <label className="text-xs text-muted-foreground font-semibold">Published Date</label>
+            <input 
+              type="date"
+              className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+              value={publishedDateFilter}
+              onChange={(e) => {
+                setPublishedDateFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
           </div>
           <div className="flex gap-2">
-            <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90">
+            <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer shadow-sm">
               <Filter className="size-4" /> Filter
             </button>
-            <button onClick={handleReset} className="h-10 px-3 rounded-lg border border-border text-sm inline-flex items-center gap-1.5 hover:bg-muted">
+            <button onClick={handleReset} className="h-10 px-3 rounded-lg border border-border text-sm inline-flex items-center gap-1.5 hover:bg-muted cursor-pointer transition-colors">
               <RotateCcw className="size-4" /> Reset
             </button>
           </div>
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground">
@@ -160,7 +181,7 @@ function Episodes() {
               </tr>
             </thead>
             <tbody>
-              {filteredEpisodes.map((e) => (
+              {paginatedEpisodes.map((e) => (
                 <tr key={e.id} className="border-t border-border hover:bg-muted/30 transition-colors">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
@@ -193,26 +214,20 @@ function Episodes() {
                   </td>
                   <td className="p-4">
                     <div className="flex gap-1">
-                      <button onClick={() => handleView(e)} className="size-8 rounded-md border border-border grid place-items-center text-info hover:bg-info/10 transition-colors"><Eye className="size-4" /></button>
-                      <button onClick={() => handleEdit(e)} className="size-8 rounded-md border border-border grid place-items-center text-warning-foreground hover:bg-warning/10 transition-colors"><Pencil className="size-4" /></button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-accent"><MoreVertical className="size-4" /></button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleView(e)}>View Details</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEdit(e)}>Edit Episode</DropdownMenuItem>
-                          <DropdownMenuItem 
-                            className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                            onClick={() => {
-                              deleteEpisode(e.id);
-                              toast.success(`Episode deleted`);
-                            }}
-                          >
-                            <Trash2 className="mr-2 size-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <button onClick={() => handleView(e)} className="size-8 rounded-md border border-border grid place-items-center text-info hover:bg-info/10 transition-colors cursor-pointer" title="View details"><Eye className="size-4" /></button>
+                      <button onClick={() => handleEdit(e)} className="size-8 rounded-md border border-border grid place-items-center text-warning-foreground hover:bg-warning/10 transition-colors cursor-pointer" title="Edit episode"><Pencil className="size-4" /></button>
+                      <button 
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to delete episode "${e.title}"?`)) {
+                            deleteEpisode(e.id);
+                            toast.success("Episode deleted successfully!");
+                          }
+                        }}
+                        className="size-8 rounded-md border border-border grid place-items-center text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                        title="Delete episode"
+                      >
+                        <Trash2 className="size-4 text-destructive" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -225,13 +240,38 @@ function Episodes() {
             </div>
           )}
         </div>
-        <div className="flex items-center justify-between p-4 text-sm border-t border-border">
-          <div className="text-muted-foreground">Showing {filteredEpisodes.length} of {episodes.length} episodes</div>
+        <div className="flex items-center justify-between p-4 text-sm border-t border-border flex-wrap gap-2">
+          <div className="text-muted-foreground">
+            Showing {Math.min(filteredEpisodes.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredEpisodes.length, currentPage * itemsPerPage)} of {filteredEpisodes.length} episodes
+          </div>
           <div className="flex items-center gap-1">
-            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronLeft className="size-4" /></button>
-            <button className="size-8 rounded-md bg-primary text-primary-foreground">1</button>
-            <button className="size-8 rounded-md border border-border hover:bg-muted">2</button>
-            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronRight className="size-4" /></button>
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+              disabled={currentPage === 1} 
+              className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            {Array.from({ length: totalPages || 1 }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`size-8 rounded-md text-xs font-semibold cursor-pointer ${
+                  currentPage === p
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : "border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+              disabled={currentPage === totalPages || totalPages === 0} 
+              className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+            >
+              <ChevronRight className="size-4" />
+            </button>
           </div>
         </div>
       </div>

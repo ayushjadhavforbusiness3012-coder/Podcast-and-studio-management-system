@@ -21,7 +21,8 @@ function Guests() {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
-  const [searchBy, setSearchBy] = useState("Name");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -50,17 +51,18 @@ function Guests() {
   const filteredGuests = useMemo(() => {
     return guests.filter((g) => {
       const q = searchQuery.toLowerCase();
-      let matchesSearch = true;
-      if (q) {
-        if (searchBy === "Name") matchesSearch = g.name.toLowerCase().includes(q);
-        else if (searchBy === "Email") matchesSearch = g.email.toLowerCase().includes(q);
-      }
-      
+      // Run search function evaluating against string values in both fields simultaneously
+      const matchesSearch = !q || g.name.toLowerCase().includes(q) || g.email.toLowerCase().includes(q);
       const matchesStatus = statusFilter === "All Status" || g.status === statusFilter;
-      
       return matchesSearch && matchesStatus;
     });
-  }, [guests, searchQuery, searchBy, statusFilter]);
+  }, [guests, searchQuery, statusFilter]);
+
+  const totalPages = Math.ceil(filteredGuests.length / itemsPerPage);
+  const paginatedGuests = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredGuests.slice(start, start + itemsPerPage);
+  }, [filteredGuests, currentPage, itemsPerPage]);
 
   const handleToggleAll = () => {
     if (selectedIds.size === filteredGuests.length) {
@@ -73,8 +75,8 @@ function Guests() {
   const handleReset = () => {
     setSearchQuery("");
     setStatusFilter("All Status");
-    setSearchBy("Name");
     setSelectedIds(new Set());
+    setCurrentPage(1);
     toast.info("Filters reset");
   };
 
@@ -128,25 +130,17 @@ function Guests() {
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-5">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-          <div>
-            <label className="text-xs text-muted-foreground">Search by</label>
-            <select 
-              className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-              value={searchBy}
-              onChange={(e) => setSearchBy(e.target.value)}
-            >
-              <option>Name</option>
-              <option>Email</option>
-            </select>
-          </div>
-          <div className="md:col-span-1">
-            <label className="text-xs text-muted-foreground invisible">x</label>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-muted-foreground">Search Guests</label>
             <input 
-              placeholder="Search..." 
-              className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" 
+              placeholder="Search by name or email..." 
+              className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none" 
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
           <div>
@@ -154,25 +148,22 @@ function Guests() {
             <select 
               className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
             >
               <option>All Status</option>
               <option>Active</option>
               <option>Inactive</option>
             </select>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Joined Date</label>
-            <select className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm">
-              <option>All Time</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleReset} className="h-10 px-3 rounded-lg border border-border bg-card text-sm inline-flex items-center gap-1.5 hover:bg-muted">
-              <RotateCcw className="size-4" /> Reset
-            </button>
-            <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90">
+          <div className="flex items-center gap-3">
+            <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer shadow-sm">
               <Filter className="size-4" /> Filter
+            </button>
+            <button onClick={handleReset} className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors cursor-pointer">
+              Reset
             </button>
           </div>
         </div>
@@ -201,7 +192,7 @@ function Guests() {
               </tr>
             </thead>
             <tbody>
-              {filteredGuests.map((g) => (
+              {paginatedGuests.map((g) => (
                 <tr key={g.id} className={`border-t border-border transition-colors ${selectedIds.has(g.id) ? "bg-primary/5" : "hover:bg-muted/30"}`}>
                   <td className="p-4">
                     <input 
@@ -227,9 +218,9 @@ function Guests() {
                   <td className="p-4">{g.bookings}</td>
                   <td className="p-4">
                     <div className="flex gap-1">
-                      <button onClick={() => handleView(g)} className="size-8 rounded-md border border-border grid place-items-center text-info hover:bg-info/10 transition-colors"><Eye className="size-4" /></button>
-                      <button onClick={() => handleEdit(g)} className="size-8 rounded-md border border-border grid place-items-center text-warning-foreground hover:bg-warning/10 transition-colors"><Pencil className="size-4" /></button>
-                      <button onClick={() => { deleteGuest(g.id); toast.success("Guest deleted"); }} className="size-8 rounded-md border border-border grid place-items-center text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="size-4" /></button>
+                      <button onClick={() => handleView(g)} className="size-8 rounded-md border border-border grid place-items-center text-info hover:bg-info/10 transition-colors cursor-pointer"><Eye className="size-4" /></button>
+                      <button onClick={() => handleEdit(g)} className="size-8 rounded-md border border-border grid place-items-center text-warning-foreground hover:bg-warning/10 transition-colors cursor-pointer"><Pencil className="size-4" /></button>
+                      <button onClick={() => { if (window.confirm("Are you sure you want to delete this guest?")) { deleteGuest(g.id); toast.success("Guest deleted"); } }} className="size-8 rounded-md border border-border grid place-items-center text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"><Trash2 className="size-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -242,15 +233,28 @@ function Guests() {
             </div>
           )}
         </div>
-        <div className="flex items-center justify-between p-4 text-sm border-t border-border">
-          <div className="text-muted-foreground">Showing {filteredGuests.length} of {guests.length} entries</div>
+        <div className="flex items-center justify-between p-4 text-sm border-t border-border flex-wrap gap-2">
+          <div className="text-muted-foreground">
+            Showing {Math.min(filteredGuests.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredGuests.length, currentPage * itemsPerPage)} of {filteredGuests.length} entries
+          </div>
           <div className="flex items-center gap-1">
-            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronsLeft className="size-4" /></button>
-            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronLeft className="size-4" /></button>
-            <button className="size-8 rounded-md bg-primary text-primary-foreground">1</button>
-            <button className="size-8 rounded-md border border-border hover:bg-muted">2</button>
-            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronRight className="size-4" /></button>
-            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"><ChevronsRight className="size-4" /></button>
+            <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronsLeft className="size-4" /></button>
+            <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronLeft className="size-4" /></button>
+            {Array.from({ length: totalPages || 1 }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`size-8 rounded-md text-xs font-semibold cursor-pointer ${
+                  currentPage === p
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : "border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages || totalPages === 0} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronRight className="size-4" /></button>
+            <button onClick={() => setCurrentPage(totalPages || 1)} disabled={currentPage === totalPages || totalPages === 0} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronsRight className="size-4" /></button>
           </div>
         </div>
       </div>
