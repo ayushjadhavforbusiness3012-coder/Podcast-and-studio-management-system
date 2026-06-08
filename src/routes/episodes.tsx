@@ -1,17 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout, StatCard, Badge } from "@/components/DashboardLayout";
-import { PlayCircle, CheckCircle2, Clock, FileEdit, Trash2, Plus, Search, Filter, RotateCcw, Eye, Pencil, MoreVertical, Mic2, ChevronLeft, ChevronRight } from "lucide-react";
+import { PlayCircle, CheckCircle2, Clock, FileEdit, Trash2, Plus, Filter, RotateCcw, Eye, Pencil, Mic2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAppContext, type Episode } from "@/contexts/AppContext";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { EpisodeFormDialog } from "@/components/EpisodeFormDialog";
 import { EpisodeDetailsDialog } from "@/components/EpisodeDetailsDialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 
 export const Route = createFileRoute("/episodes")({
   head: () => ({ meta: [{ title: "Episodes — Podcast Studio" }] }),
@@ -19,11 +14,16 @@ export const Route = createFileRoute("/episodes")({
 });
 
 function Episodes() {
-  const { episodes, deleteEpisode } = useAppContext();
+  const { episodes, deleteEpisode, formatDate, formatTime } = useAppContext();
 
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
+
+  const [tempSearchQuery, setTempSearchQuery] = useState("");
+  const [tempShow, setTempShow] = useState("All Shows");
+  const [tempStatus, setTempStatus] = useState("All Status");
+  const [tempDate, setTempDate] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState("All Shows");
@@ -47,7 +47,20 @@ function Episodes() {
     setFormOpen(true);
   };
 
+  const handleApplyFilters = () => {
+    setSearchQuery(tempSearchQuery);
+    setShowFilter(tempShow);
+    setStatusFilter(tempStatus);
+    setPublishedDateFilter(tempDate);
+    setCurrentPage(1);
+    toast.success("Filters applied");
+  };
+
   const handleReset = () => {
+    setTempSearchQuery("");
+    setTempShow("All Shows");
+    setTempStatus("All Status");
+    setTempDate("");
     setSearchQuery("");
     setShowFilter("All Shows");
     setStatusFilter("All Status");
@@ -71,7 +84,7 @@ function Episodes() {
           matchesDate = eDate.getFullYear() === fDate.getFullYear() &&
                         eDate.getMonth() === fDate.getMonth() &&
                         eDate.getDate() === fDate.getDate();
-        } catch (err) {
+        } catch {
           matchesDate = false;
         }
       }
@@ -111,30 +124,36 @@ function Episodes() {
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
           <div className="md:col-span-2">
-            <label className="text-xs text-muted-foreground">Search Episodes</label>
+            <label className="text-xs text-muted-foreground" htmlFor="search-episodes">Search Episodes</label>
             <input 
+              id="search-episodes"
               placeholder="Search by title or guest..." 
               className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={tempSearchQuery}
+              onChange={(e) => setTempSearchQuery(e.target.value)}
+              title="Search by title or guest"
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Show / Series</label>
+            <label className="text-xs text-muted-foreground" htmlFor="select-show">Show / Series</label>
             <select 
+              id="select-show"
               className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-              value={showFilter}
-              onChange={(e) => setShowFilter(e.target.value)}
+              value={tempShow}
+              onChange={(e) => setTempShow(e.target.value)}
+              title="Select show or series"
             >
               {shows.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Status</label>
+            <label className="text-xs text-muted-foreground" htmlFor="select-status">Status</label>
             <select 
+              id="select-status"
               className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              value={tempStatus}
+              onChange={(e) => setTempStatus(e.target.value)}
+              title="Select status"
             >
               <option>All Status</option>
               <option>Published</option>
@@ -144,23 +163,29 @@ function Episodes() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground font-semibold">Published Date</label>
+            <label className="text-xs text-muted-foreground font-semibold" htmlFor="select-pubdate">Published Date</label>
             <input 
+              id="select-pubdate"
               type="date"
               className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-              value={publishedDateFilter}
+              value={tempDate}
               onChange={(e) => {
-                setPublishedDateFilter(e.target.value);
-                setCurrentPage(1);
+                setTempDate(e.target.value);
               }}
+              title="Select published date"
             />
           </div>
           <div className="flex gap-2">
-            <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer shadow-sm">
+            <button onClick={handleApplyFilters} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer shadow-sm">
               <Filter className="size-4" /> Filter
             </button>
-            <button onClick={handleReset} className="h-10 px-3 rounded-lg border border-border text-sm inline-flex items-center gap-1.5 hover:bg-muted cursor-pointer transition-colors">
-              <RotateCcw className="size-4" /> Reset
+            <button 
+              onClick={handleReset} 
+              className="h-10 w-10 rounded-lg border border-border grid place-items-center text-muted-foreground hover:bg-muted cursor-pointer transition-colors"
+              title="Reset Filters"
+              aria-label="Reset Filters"
+            >
+              <RotateCcw className="size-4" />
             </button>
           </div>
         </div>
@@ -207,8 +232,8 @@ function Episodes() {
                   <td className="p-4">
                     {e.date === "—" ? <span className="text-muted-foreground">—</span> : (
                       <div>
-                        <div>{e.date}</div>
-                        <div className="text-xs text-muted-foreground">{e.time}</div>
+                        <div>{formatDate(e.date)}</div>
+                        <div className="text-xs text-muted-foreground">{formatTime(e.time)}</div>
                       </div>
                     )}
                   </td>
@@ -249,6 +274,8 @@ function Episodes() {
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
               disabled={currentPage === 1} 
               className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+              title="Previous page"
+              aria-label="Previous page"
             >
               <ChevronLeft className="size-4" />
             </button>
@@ -261,6 +288,8 @@ function Episodes() {
                     ? "bg-primary text-primary-foreground font-bold"
                     : "border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
                 }`}
+                title={`Page ${p}`}
+                aria-label={`Page ${p}`}
               >
                 {p}
               </button>
@@ -269,6 +298,8 @@ function Episodes() {
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
               disabled={currentPage === totalPages || totalPages === 0} 
               className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+              title="Next page"
+              aria-label="Next page"
             >
               <ChevronRight className="size-4" />
             </button>

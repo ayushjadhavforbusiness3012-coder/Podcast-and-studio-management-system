@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useState, useEffect } from "react";
 import { useAppContext, type Episode } from "@/contexts/AppContext";
 import { toast } from "sonner";
@@ -97,25 +97,30 @@ export function EpisodeFormDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{episodeToEdit ? "Edit Episode" : "New Episode"}</DialogTitle>
+          <DialogDescription className="sr-only">Form to create or edit a podcast episode.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Episode Title *</label>
+            <label className="text-sm font-medium" htmlFor="episode-title">Episode Title *</label>
             <input
+              id="episode-title"
               autoFocus
               className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               placeholder="e.g. The Future of AI"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              title="Episode Title"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Show / Series</label>
+              <label className="text-sm font-medium" htmlFor="episode-show">Show / Series</label>
               <select
+                id="episode-show"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={show}
                 onChange={(e) => setShow(e.target.value)}
+                title="Select Show / Series"
               >
                 <option>Podcast Studio</option>
                 <option>Tech Talk</option>
@@ -125,42 +130,51 @@ export function EpisodeFormDialog({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Guest</label>
+              <label className="text-sm font-medium" htmlFor="episode-guest">Guest</label>
               <input
+                id="episode-guest"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 placeholder="Rahul Verma"
                 value={guest}
                 onChange={(e) => setGuest(e.target.value)}
+                title="Guest Name"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Date</label>
+              <label className="text-sm font-medium" htmlFor="episode-date">Date</label>
               <input
+                id="episode-date"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 placeholder="15 May 2025"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                title="Date"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Duration</label>
+              <label className="text-sm font-medium" htmlFor="episode-duration">Duration</label>
               <input
+                id="episode-duration"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm opacity-65 cursor-not-allowed"
                 value={calculatedDur}
                 disabled={true}
+                placeholder="Calculated Duration"
+                title="Calculated Duration"
               />
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Starting Time Slot</label>
+              <label className="text-sm font-medium" htmlFor="episode-start-slot">Starting Time Slot</label>
               <select
+                id="episode-start-slot"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={startSlot}
                 onChange={(e) => handleStartSlotChange(e.target.value)}
+                title="Select Starting Time Slot"
               >
                 {START_SLOTS.map((slot) => (
                   <option key={slot} value={slot}>{slot}</option>
@@ -168,11 +182,13 @@ export function EpisodeFormDialog({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Ending Time Slot</label>
+              <label className="text-sm font-medium" htmlFor="episode-end-slot">Ending Time Slot</label>
               <select
+                id="episode-end-slot"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={endSlot}
                 onChange={(e) => setEndSlot(e.target.value)}
+                title="Select Ending Time Slot"
               >
                 {END_SLOTS.map((slot) => (
                   <option key={slot} value={slot} disabled={parseInt(slot.split(":")[0], 10) <= startHour}>
@@ -184,11 +200,13 @@ export function EpisodeFormDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Status</label>
+            <label className="text-sm font-medium" htmlFor="episode-status">Status</label>
             <select
+              id="episode-status"
               className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               value={status}
               onChange={(e) => setStatus(e.target.value as Episode["status"])}
+              title="Select Status"
             >
               <option>Published</option>
               <option>Scheduled</option>

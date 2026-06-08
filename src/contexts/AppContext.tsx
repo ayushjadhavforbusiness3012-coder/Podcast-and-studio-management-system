@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode } from "react";
 
 export type Booking = {
   id: string;
@@ -93,6 +93,79 @@ export type Package = {
   popular?: boolean;
 };
 
+export type Addon = {
+  id: string;
+  name: string;
+  price: number;
+  iconName: "Clock" | "Video" | "Headphones" | "Sparkles" | "Mic" | "Camera" | "Music";
+};
+
+export type Notification = {
+  id: string;
+  iconName: string;
+  color: string;
+  title: string;
+  unread: boolean;
+  category: "Bookings" | "Payments" | "Episodes" | "System";
+  createdAt: string;
+  time: string;
+};
+
+export type StudioSettings = {
+  name: string;
+  tagline: string;
+  description: string;
+  email: string;
+  phone: string;
+  website: string;
+  address: string;
+  logoUrl?: string;
+};
+
+export type LocalizationSettings = {
+  language: string;
+  timezone: string;
+  dateFormat: string;
+  timeFormat: string;
+};
+
+export type BookingSettings = {
+  defaultStatus: string;
+  autoPublish: boolean;
+  requireApproval: boolean;
+  bufferTime: string;
+  liveStreaming: boolean;
+  videoRecording: boolean;
+  guestUploads: boolean;
+  publicProfile: boolean;
+};
+
+export type PaymentSettings = {
+  currency: string;
+  taxRate: number;
+  stripeEnabled: boolean;
+  paypalEnabled: boolean;
+};
+
+export type AppSettings = {
+  studio: StudioSettings;
+  localization: LocalizationSettings;
+  booking: BookingSettings;
+  payment: PaymentSettings;
+  notifications: {
+    emailAlerts: boolean;
+    systemAlerts: boolean;
+  };
+};
+
+export type AdminProfile = {
+  name: string;
+  email: string;
+  avatarIndex: number;
+  role: string;
+  bio?: string;
+};
+
 type AppContextType = {
   bookings: Booking[];
   addBooking: (b: Omit<Booking, "id" | "sv">) => void;
@@ -115,12 +188,30 @@ type AppContextType = {
   addPackage: (p: Omit<Package, "id">) => void;
   updatePackage: (id: string, updates: Partial<Package>) => void;
   deletePackage: (id: string) => void;
+  addons: Addon[];
+  addAddon: (a: Omit<Addon, "id">) => void;
+  updateAddon: (id: string, updates: Partial<Addon>) => void;
+  deleteAddon: (id: string) => void;
   users: User[];
   addUser: (u: Omit<User, "you">) => void;
   updateUser: (index: number, updates: Partial<User>) => void;
   deleteUser: (index: number) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
+  isLoggedIn: boolean;
+  login: () => void;
+  logout: () => void;
+  settings: AppSettings;
+  updateSettings: (updates: Partial<AppSettings>) => void;
+  adminProfile: AdminProfile;
+  updateAdminProfile: (updates: Partial<AdminProfile>) => void;
+  notifications: Notification[];
+  addNotification: (title: string, category: Notification["category"], iconName: string, color: string) => void;
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
+  deleteNotification: (id: string) => void;
+  formatDate: (dateStr: string) => string;
+  formatTime: (timeStr: string) => string;
 };
 
 const initialBookings: Booking[] = [
@@ -173,7 +264,125 @@ const initialPackages: Package[] = [
   { id: "PKG-6", iconName: "InfinityIcon", color: "bg-destructive", name: "Enterprise Package", desc: "Custom solutions", cat: "Enterprise", catV: "destructive", dur: "Custom", price: "Custom", features: ["Custom Access", "Custom Equipment"], extra: "+ more", bookings: 26 },
 ];
 
+const initialAddons: Addon[] = [
+  { id: "ADD-1", name: "Extra Hour", price: 1500, iconName: "Clock" },
+  { id: "ADD-2", name: "Video Recording", price: 2000, iconName: "Video" },
+  { id: "ADD-3", name: "Audio Editing", price: 1000, iconName: "Headphones" },
+  { id: "ADD-4", name: "Thumbnail Design", price: 800, iconName: "Sparkles" },
+];
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+function parseDateString(dateStr: string): Date | null {
+  if (!dateStr || dateStr === "—") return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return new Date(dateStr);
+  }
+  
+  const months: Record<string, number> = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  };
+  const parts = dateStr.trim().split(/\s+/);
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const monthStr = parts[1].toLowerCase().substring(0, 3);
+    const year = parseInt(parts[2], 10);
+    if (!isNaN(day) && !isNaN(year) && monthStr in months) {
+      return new Date(year, months[monthStr], day);
+    }
+  }
+  
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
+function formatDateHelper(dateStr: string, format: string): string {
+  if (!dateStr || dateStr === "—" || dateStr.toLowerCase().includes("ago") || dateStr.toLowerCase().includes("today") || dateStr.toLowerCase().includes("yesterday")) {
+    return dateStr;
+  }
+  const dateObj = parseDateString(dateStr);
+  if (!dateObj) return dateStr;
+  
+  const day = dateObj.getDate().toString().padStart(2, "0");
+  const year = dateObj.getFullYear();
+  const monthsAbbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthAbbr = monthsAbbr[dateObj.getMonth()];
+  const monthNum = (dateObj.getMonth() + 1).toString().padStart(2, "0");
+  
+  if (format === "YYYY-MM-DD" || format === "2025-05-31") {
+    return `${year}-${monthNum}-${day}`;
+  } else if (format === "MM/DD/YYYY" || format === "05/31/2025") {
+    return `${monthNum}/${day}/${year}`;
+  } else if (format === "DD/MM/YYYY" || format === "31/05/2025") {
+    return `${day}/${monthNum}/${year}`;
+  } else {
+    return `${parseInt(day, 10)} ${monthAbbr} ${year}`;
+  }
+}
+
+function formatTimeHelper(timeStr: string, format: string): string {
+  if (!timeStr) return timeStr;
+  
+  const formatSingleTime = (singleTime: string) => {
+    const trimmed = singleTime.trim();
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return trimmed;
+    
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const ampm = match[3]?.toUpperCase();
+    
+    if (ampm) {
+      if (format.includes("24 Hour")) {
+        if (ampm === "PM" && hours < 12) hours += 12;
+        if (ampm === "AM" && hours === 12) hours = 0;
+        return `${hours.toString().padStart(2, "0")}:${minutes}`;
+      } else {
+        return `${hours.toString().padStart(2, "0")}:${minutes} ${ampm}`;
+      }
+    } else {
+      if (format.includes("12 Hour")) {
+        const suffix = hours >= 12 ? "PM" : "AM";
+        let displayHours = hours % 12;
+        if (displayHours === 0) displayHours = 12;
+        return `${displayHours.toString().padStart(2, "0")}:${minutes} ${suffix}`;
+      } else {
+        return `${hours.toString().padStart(2, "0")}:${minutes}`;
+      }
+    }
+  };
+  
+  if (timeStr.includes("-")) {
+    const parts = timeStr.split("-");
+    if (parts.length === 2) {
+      return `${formatSingleTime(parts[0])} - ${formatSingleTime(parts[1])}`;
+    }
+  }
+  
+  return formatSingleTime(timeStr);
+}
+
+function getRelativeTimeString(dateInput: Date | string): string {
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  if (isNaN(date.getTime())) return typeof dateInput === "string" ? dateInput : "Just now";
+  
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  
+  return date.toLocaleDateString("en-GB", { day: 'numeric', month: 'short' });
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [bookings, setBookings] = useState<Booking[]>(initialBookings);
@@ -181,9 +390,129 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [episodes, setEpisodes] = useState<Episode[]>(initialEpisodes);
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [packages, setPackages] = useState<Package[]>(initialPackages);
+  const [addons, setAddons] = useState<Addon[]>(initialAddons);
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [searchQuery, setSearchQuery] = useState("");
   const [nextBookingId, setNextBookingId] = useState(1025);
+
+  // Authentication State
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
+
+  // Admin Profile State
+  const [adminProfile, setAdminProfile] = useState<AdminProfile>({
+    name: "Admin",
+    email: "admin@podcaststudio.com",
+    avatarIndex: 12,
+    role: "Super Admin",
+    bio: "Chief podcast officer and platform manager."
+  });
+
+  // Settings State
+  const [settings, setSettings] = useState<AppSettings>({
+    studio: {
+      name: "Podcast Studio",
+      tagline: "Record. Create. Publish.",
+      description: "A professional podcasting studio for creators, businesses and brands to record high-quality content.",
+      email: "hello@podcaststudio.com",
+      phone: "+91 98765 43210",
+      website: "https://podcaststudio.com",
+      address: "123 Creator Street, Andheri West, Mumbai, Maharashtra 400053, India",
+    },
+    localization: {
+      language: "English (US)",
+      timezone: "(IST) Asia/Kolkata",
+      dateFormat: "31 May 2025",
+      timeFormat: "12 Hour (02:30 PM)",
+    },
+    booking: {
+      defaultStatus: "Draft",
+      autoPublish: true,
+      requireApproval: false,
+      bufferTime: "30 Minutes",
+      liveStreaming: true,
+      videoRecording: true,
+      guestUploads: false,
+      publicProfile: true,
+    },
+    payment: {
+      currency: "₹ (INR)",
+      taxRate: 18,
+      stripeEnabled: true,
+      paypalEnabled: false,
+    },
+    notifications: {
+      emailAlerts: true,
+      systemAlerts: true,
+    }
+  });
+
+  // Notifications State
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    return [
+      { id: "n1", iconName: "Calendar", color: "bg-accent text-primary", title: "New booking received for 'Tech Talk'", unread: true, category: "Bookings", createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(), time: "10 mins ago" },
+      { id: "n2", iconName: "CreditCard", color: "bg-success/15 text-success", title: "Payment of ₹4,000 received from Sneha Sharma", unread: true, category: "Payments", createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), time: "2 hours ago" },
+      { id: "n3", iconName: "UserPlus", color: "bg-info/15 text-info", title: "New user Sneha Sharma added to your team", unread: true, category: "System", createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), time: "5 hours ago" },
+      { id: "n4", iconName: "Mic2", color: "bg-warning/20 text-warning-foreground", title: "Episode 'Mindset Ep. 12' published successfully", unread: true, category: "Episodes", createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), time: "1 day ago" },
+      { id: "n5", iconName: "Bell", color: "bg-pink/20 text-pink-foreground", title: "Reminder: Booking 'Marketing Podcast' starts in 1 hour", unread: true, category: "Bookings", createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), time: "1 day ago" },
+      { id: "n6", iconName: "CheckCircle2", color: "bg-muted text-muted-foreground", title: "Weekly studio report is ready to view", unread: false, category: "System", createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), time: "3 days ago" },
+      { id: "n7", iconName: "Calendar", color: "bg-muted text-muted-foreground", title: "Booking 'Creators Hub' was rescheduled", unread: false, category: "Bookings", createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), time: "4 days ago" },
+    ];
+  });
+
+  const login = () => setIsLoggedIn(true);
+  const logout = () => setIsLoggedIn(false);
+
+  const updateSettings = (updates: Partial<AppSettings>) => {
+    setSettings((prev) => ({ ...prev, ...updates }));
+  };
+
+  const updateAdminProfile = (updates: Partial<AdminProfile>) => {
+    setAdminProfile((prev) => ({ ...prev, ...updates }));
+  };
+
+  const addNotification = (title: string, category: Notification["category"], iconName: string, color: string) => {
+    const newNotif: Notification = {
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      iconName,
+      color,
+      title,
+      unread: true,
+      category,
+      createdAt: new Date().toISOString(),
+      time: "Just now"
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+  };
+
+  const markNotificationRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
+    );
+  };
+
+  const markAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+  };
+
+  const deleteNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const formatDate = (dateStr: string) => {
+    return formatDateHelper(dateStr, settings.localization.dateFormat);
+  };
+
+  const formatTime = (timeStr: string) => {
+    return formatTimeHelper(timeStr, settings.localization.timeFormat);
+  };
+
+  // Sync / update readable relative time strings on notifications list whenever accessed
+  const getFormattedNotifications = () => {
+    return notifications.map(n => ({
+      ...n,
+      time: getRelativeTimeString(n.createdAt)
+    }));
+  };
 
   const addInvoice = (i: Omit<Invoice, "id" | "bar" | "img">) => {
     const newId = `INV-${1009 + invoices.length}`;
@@ -194,19 +523,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (i.status === "Overdue") bar = "bg-destructive";
     
     setInvoices((prev) => [{ ...i, id: newId, img: Math.floor(Math.random() * 70), bar }, ...prev]);
+    
+    if (i.status === "Paid") {
+      addNotification(`Payment of ${i.amount} received from ${i.name}`, "Payments", "CreditCard", "bg-success/15 text-success");
+    } else if (i.status === "Overdue") {
+      addNotification(`Invoice ${newId} (${i.amount}) is overdue for ${i.name}`, "Payments", "CreditCard", "bg-destructive/10 text-destructive");
+    }
   };
 
   const updateInvoice = (id: string, updates: Partial<Invoice>) => {
     setInvoices((prev) =>
-      prev.map((i) => {
-        if (i.id === id) {
-          const updated = { ...i, ...updates };
+      prev.map((inv) => {
+        if (inv.id === id) {
+          const updated = { ...inv, ...updates };
           if (updated.status === "Paid") updated.bar = "bg-success";
           if (updated.status === "Pending") updated.bar = "bg-warning";
           if (updated.status === "Overdue") updated.bar = "bg-destructive";
+          
+          if (updates.status && updates.status !== inv.status) {
+            if (updates.status === "Paid") {
+              addNotification(`Payment of ${updated.amount} received from ${updated.name}`, "Payments", "CreditCard", "bg-success/15 text-success");
+            } else if (updates.status === "Overdue") {
+              addNotification(`Payment of ${updated.amount} failed/overdue for ${updated.name}`, "Payments", "CreditCard", "bg-destructive/10 text-destructive");
+            }
+          }
           return updated;
         }
-        return i;
+        return inv;
       })
     );
   };
@@ -218,14 +561,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addPackage = (p: Omit<Package, "id">) => {
     const newId = `PKG-${Date.now()}`;
     setPackages((prev) => [...prev, { ...p, id: newId }]);
+    addNotification(`New package '${p.name}' created`, "System", "Package", "bg-pink/20 text-pink-foreground");
   };
 
   const updatePackage = (id: string, updates: Partial<Package>) => {
-    setPackages((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+    setPackages((prev) => prev.map((p) => {
+      if (p.id === id) {
+        addNotification(`Package '${p.name}' updated`, "System", "Package", "bg-pink/20 text-pink-foreground");
+        return { ...p, ...updates };
+      }
+      return p;
+    }));
   };
 
   const deletePackage = (id: string) => {
     setPackages((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const addAddon = (a: Omit<Addon, "id">) => {
+    const newId = `ADD-${Date.now()}`;
+    setAddons((prev) => [...prev, { ...a, id: newId }]);
+  };
+
+  const updateAddon = (id: string, updates: Partial<Addon>) => {
+    setAddons((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
+  };
+
+  const deleteAddon = (id: string) => {
+    setAddons((prev) => prev.filter((a) => a.id !== id));
   };
 
   const addEpisode = (e: Omit<Episode, "id" | "sv" | "color" | "img" | "ep">) => {
@@ -241,6 +604,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const color = colors[Math.floor(Math.random() * colors.length)];
     
     setEpisodes((prev) => [{ ...e, id: newId, ep: epNum, img: Math.floor(Math.random() * 70), sv, color }, ...prev]);
+    
+    if (e.status === "Published") {
+      addNotification(`Episode '${e.title}' published successfully`, "Episodes", "Mic2", "bg-warning/20 text-warning-foreground");
+    } else {
+      addNotification(`New episode draft '${e.title}' created`, "Episodes", "Mic2", "bg-muted text-muted-foreground");
+    }
   };
 
   const updateEpisode = (id: string, updates: Partial<Episode>) => {
@@ -252,6 +621,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (updated.status === "Scheduled") updated.sv = "warning";
           if (updated.status === "Draft") updated.sv = "info";
           if (updated.status === "Archived") updated.sv = "default";
+          
+          if (updates.status && updates.status !== e.status && updates.status === "Published") {
+            addNotification(`Episode '${updated.title}' published successfully`, "Episodes", "Mic2", "bg-warning/20 text-warning-foreground");
+          }
           return updated;
         }
         return e;
@@ -293,6 +666,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (b.status === "Completed") sv = "primary";
 
     setBookings((prev) => [{ ...b, id: newId, sv }, ...prev]);
+    
+    addNotification(`New studio booking ${newId} created for ${b.guest}`, "Bookings", "Calendar", "bg-accent text-primary");
+    addNotification(`Package '${b.pkg}' purchased by ${b.guest}`, "Payments", "CreditCard", "bg-success/15 text-success");
   };
 
   const updateBooking = (id: string, updates: Partial<Booking>) => {
@@ -304,6 +680,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (updated.status === "Pending") updated.sv = "warning";
           if (updated.status === "Cancelled") updated.sv = "destructive";
           if (updated.status === "Completed") updated.sv = "primary";
+          
+          if (updates.status && updates.status !== b.status) {
+            if (updates.status === "Cancelled") {
+              addNotification(`Booking ${id} was cancelled`, "Bookings", "Calendar", "bg-destructive/10 text-destructive");
+            } else {
+              addNotification(`Booking ${id} status updated to ${updates.status}`, "Bookings", "Calendar", "bg-accent text-primary");
+            }
+          } else {
+            addNotification(`Booking ${id} details updated`, "Bookings", "Calendar", "bg-accent text-primary");
+          }
           return updated;
         }
         return b;
@@ -313,11 +699,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteBooking = (id: string) => {
     setBookings((prev) => prev.filter((b) => b.id !== id));
+    addNotification(`Booking ${id} was deleted`, "Bookings", "Calendar", "bg-destructive/10 text-destructive");
   };
 
   const addUser = (u: Omit<User, "you">) => {
     setUsers((prev) => [{ ...u, img: Math.floor(Math.random() * 70), you: false }, ...prev]);
+    addNotification(`New user '${u.name}' registered as ${u.role}`, "System", "UserPlus", "bg-info/15 text-info");
   };
+  
   const updateUser = (index: number, updates: Partial<User>) => {
     setUsers((prev) => prev.map((u, i) => i === index ? { ...u, ...updates } : u));
   };
@@ -332,8 +721,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         episodes, addEpisode, updateEpisode, deleteEpisode,
         invoices, addInvoice, updateInvoice, deleteInvoice,
         packages, addPackage, updatePackage, deletePackage,
+        addons, addAddon, updateAddon, deleteAddon,
         users, addUser, updateUser, deleteUser,
-        searchQuery, setSearchQuery 
+        searchQuery, setSearchQuery,
+        isLoggedIn, login, logout,
+        settings, updateSettings,
+        adminProfile, updateAdminProfile,
+        notifications: getFormattedNotifications(),
+        addNotification, markNotificationRead, markAllNotificationsRead, deleteNotification,
+        formatDate, formatTime
       }}>
         {children}
       </AppContext.Provider>

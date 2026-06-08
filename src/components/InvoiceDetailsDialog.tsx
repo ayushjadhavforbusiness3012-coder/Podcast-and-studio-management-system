@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { type Invoice } from "@/contexts/AppContext";
 import { Badge } from "@/components/DashboardLayout";
 import { Download, Mail, Printer } from "lucide-react";
@@ -25,6 +25,7 @@ export function InvoiceDetailsDialog({
             <DialogTitle>Invoice Details</DialogTitle>
             <Badge variant={statusVariant[invoice.status]}>{invoice.status}</Badge>
           </div>
+          <DialogDescription className="sr-only">Detailed invoice information.</DialogDescription>
         </DialogHeader>
 
         <div className="py-4 space-y-6">

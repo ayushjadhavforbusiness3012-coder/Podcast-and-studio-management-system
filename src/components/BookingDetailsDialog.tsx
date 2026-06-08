@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { type Booking } from "@/contexts/AppContext";
 import { Badge } from "@/components/DashboardLayout";
 
@@ -18,6 +18,7 @@ export function BookingDetailsDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Booking Details - {booking.id}</DialogTitle>
+          <DialogDescription className="sr-only">Detailed info for booking {booking.id}</DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">

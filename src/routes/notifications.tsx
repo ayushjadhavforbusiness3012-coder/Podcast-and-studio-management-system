@@ -8,52 +8,47 @@ export const Route = createFileRoute("/notifications")({
   head: () => ({ meta: [{ title: "Notifications — Podcast Studio" }] }),
   component: Notifications,
 });
+import { useAppContext } from "@/contexts/AppContext";
+import { Crown, Package as PackageIcon } from "lucide-react";
 
-type Notification = {
-  id: string;
-  icon: typeof Bell;
-  color: string;
-  title: string;
-  time: string;
-  unread: boolean;
-  category: string;
-};
-
-const initialItems: Notification[] = [
-  { id: "n1", icon: Calendar, color: "bg-accent text-primary", title: "New booking received for 'Tech Talk'", time: "10 minutes ago", unread: true, category: "Bookings" },
-  { id: "n2", icon: CreditCard, color: "bg-success/15 text-success", title: "Payment of ₹4,000 received from Sneha Sharma", time: "2 hours ago", unread: true, category: "Payments" },
-  { id: "n3", icon: UserPlus, color: "bg-info/15 text-info", title: "New user Sneha Sharma added to your team", time: "5 hours ago", unread: true, category: "System" },
-  { id: "n4", icon: Mic2, color: "bg-warning/20 text-warning-foreground", title: "Episode 'Mindset Ep. 12' published successfully", time: "1 day ago", unread: true, category: "Episodes" },
-  { id: "n5", icon: Bell, color: "bg-pink/20 text-pink-foreground", title: "Reminder: Booking 'Marketing Podcast' starts in 1 hour", time: "1 day ago", unread: true, category: "Bookings" },
-  { id: "n6", icon: CheckCircle2, color: "bg-muted text-muted-foreground", title: "Weekly studio report is ready to view", time: "3 days ago", unread: false, category: "System" },
-  { id: "n7", icon: Calendar, color: "bg-muted text-muted-foreground", title: "Booking 'Creators Hub' was rescheduled", time: "4 days ago", unread: false, category: "Bookings" },
-];
+function getIcon(name: string) {
+  switch (name) {
+    case "Calendar": return Calendar;
+    case "CreditCard": return CreditCard;
+    case "UserPlus": return UserPlus;
+    case "Mic2": return Mic2;
+    case "CheckCircle2": return CheckCircle2;
+    case "Crown": return Crown;
+    case "Package": return PackageIcon;
+    default: return Bell;
+  }
+}
 
 function Notifications() {
-  const [items, setItems] = useState<Notification[]>(initialItems);
+  const { notifications, markNotificationRead, markAllNotificationsRead, deleteNotification } = useAppContext();
   const [activeTab, setActiveTab] = useState("All");
 
   const tabs = ["All", "Unread", "Bookings", "Payments", "Episodes", "System"];
 
-  const unreadCount = items.filter((n) => n.unread).length;
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   const filteredItems = useMemo(() => {
-    if (activeTab === "All") return items;
-    if (activeTab === "Unread") return items.filter((n) => n.unread);
-    return items.filter((n) => n.category === activeTab);
-  }, [items, activeTab]);
+    if (activeTab === "All") return notifications;
+    if (activeTab === "Unread") return notifications.filter((n) => n.unread);
+    return notifications.filter((n) => n.category === activeTab);
+  }, [notifications, activeTab]);
 
   const handleMarkAllRead = () => {
-    setItems((prev) => prev.map((n) => ({ ...n, unread: false })));
+    markAllNotificationsRead();
     toast.success("All notifications marked as read");
   };
 
   const handleToggleRead = (id: string) => {
-    setItems((prev) => prev.map((n) => n.id === id ? { ...n, unread: !n.unread } : n));
+    markNotificationRead(id);
   };
 
   const handleDelete = (id: string) => {
-    setItems((prev) => prev.filter((n) => n.id !== id));
+    deleteNotification(id);
     toast.success("Notification deleted");
   };
 
@@ -62,9 +57,11 @@ function Notifications() {
       title="Notifications"
       subtitle="Stay updated with all studio activities"
       actions={
-        <button onClick={handleMarkAllRead} className="h-10 px-4 rounded-lg border border-border bg-card text-sm font-medium hover:bg-muted">
-          Mark all as read
-        </button>
+        unreadCount > 0 && (
+          <button onClick={handleMarkAllRead} className="h-10 px-4 rounded-lg border border-border bg-card text-sm font-medium hover:bg-muted transition-colors cursor-pointer shadow-sm">
+            Mark all as read
+          </button>
+        )
       }
     >
       <div className="bg-card border border-border rounded-2xl p-2 flex gap-1 flex-wrap">
@@ -72,7 +69,7 @@ function Notifications() {
           <button
             key={t}
             onClick={() => setActiveTab(t)}
-            className={`px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            className={`px-4 py-2 rounded-lg text-sm transition-all cursor-pointer inline-flex items-center gap-1.5 ${activeTab === t ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:bg-muted"}`}
           >
             {t}
             {t === "Unread" && unreadCount > 0 && (
@@ -82,27 +79,27 @@ function Notifications() {
         ))}
       </div>
 
-      <div className="bg-card border border-border rounded-2xl divide-y divide-border">
+      <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
         {filteredItems.length === 0 && (
-          <div className="p-8 text-center text-muted-foreground">No notifications in this category.</div>
+          <div className="p-12 text-center text-muted-foreground text-sm">No notifications in this category.</div>
         )}
         {filteredItems.map((n) => {
-          const Ic = n.icon;
+          const Ic = getIcon(n.iconName);
           return (
-            <div key={n.id} className={`flex items-start gap-4 p-5 hover:bg-muted/30 transition-colors group ${n.unread ? "bg-accent/30" : ""}`}>
+            <div key={n.id} className={`flex items-start gap-4 p-5 hover:bg-muted/30 transition-colors group ${n.unread ? "bg-accent/10" : ""}`}>
               <div className={`size-10 rounded-xl ${n.color} grid place-items-center shrink-0`}>
                 <Ic className="size-5" />
               </div>
               <div className="flex-1 cursor-pointer" onClick={() => handleToggleRead(n.id)}>
-                <div className={`text-sm ${n.unread ? "font-medium" : ""}`}>{n.title}</div>
+                <div className={`text-sm ${n.unread ? "font-bold text-foreground" : "text-foreground/85"}`}>{n.title}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">{n.time}</div>
               </div>
-              <div className="flex items-center gap-2">
-                {n.unread && <span className="size-2 rounded-full bg-primary mt-2" />}
+              <div className="flex items-center gap-3">
+                {n.unread && <span className="size-2 rounded-full bg-primary mt-2 shrink-0 animate-pulse" />}
                 <button
                   onClick={() => handleDelete(n.id)}
-                  className="size-7 rounded-md border border-border grid place-items-center text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
-                  title="Delete"
+                  className="size-7 rounded-md border border-border grid place-items-center text-destructive opacity-0 group-hover:opacity-100 transition-all hover:bg-destructive/10 cursor-pointer"
+                  title="Delete Notification"
                 >
                   <Trash2 className="size-3.5" />
                 </button>

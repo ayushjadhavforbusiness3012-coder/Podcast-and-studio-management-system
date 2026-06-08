@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { useAppContext } from "@/contexts/AppContext";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,6 +8,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useAppContext } from "@/contexts/AppContext";
+import { toast } from "sonner";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -24,6 +34,9 @@ import {
   ChevronRight,
   Menu,
   X,
+  CheckCircle2,
+  Crown,
+  UserPlus,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -37,7 +50,7 @@ const nav = [
   { to: "/packages", label: "Packages", icon: Package },
   { to: "/users", label: "Users", icon: UserCog },
   { to: "/reports", label: "Reports", icon: BarChart3 },
-  { to: "/notifications", label: "Notifications", icon: Bell, badge: 5 },
+  { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -54,7 +67,18 @@ export function DashboardLayout({
 }) {
   const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { searchQuery, setSearchQuery } = useAppContext();
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+
+  const {
+    notifications,
+    logout,
+    adminProfile,
+    markNotificationRead,
+    markAllNotificationsRead,
+    deleteNotification,
+  } = useAppContext();
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   const sidebarContent = (
     <>
@@ -79,6 +103,7 @@ export function DashboardLayout({
         {nav.map((item) => {
           const active = pathname === item.to;
           const Icon = item.icon;
+          const displayBadge = item.to === "/notifications" ? (unreadCount > 0 ? unreadCount : undefined) : undefined;
           return (
             <Link
               key={item.to}
@@ -92,9 +117,9 @@ export function DashboardLayout({
             >
               <Icon className="size-[18px]" />
               <span className="flex-1">{item.label}</span>
-              {item.badge && (
+              {displayBadge !== undefined && (
                 <span className="bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full size-5 grid place-items-center">
-                  {item.badge}
+                  {displayBadge}
                 </span>
               )}
             </Link>
@@ -153,52 +178,94 @@ export function DashboardLayout({
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             {actions}
-            {pathname === "/" && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="relative size-10 rounded-lg border border-border bg-card grid place-items-center hover:bg-muted">
-                    <Bell className="size-4" />
-                    <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full size-4 grid place-items-center">5</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>New booking from Rahul Verma</DropdownMenuItem>
-                  <DropdownMenuItem>Payment received: ₹6,000</DropdownMenuItem>
-                  <DropdownMenuItem>Studio A maintenance scheduled</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-center text-primary justify-center">View all notifications</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="relative size-10 rounded-lg border border-border bg-card grid place-items-center hover:bg-muted" title="View notifications">
+                  <Bell className="size-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full size-4 grid place-items-center">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-2">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                  <span className="font-semibold text-sm">Notifications ({unreadCount})</span>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllNotificationsRead}
+                      className="text-xs text-primary hover:underline font-medium animate-fade-in"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-64 overflow-y-auto divide-y divide-border">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-muted-foreground">No notifications</div>
+                  ) : (
+                    notifications.slice(0, 5).map((n) => {
+                      const Icon = getIconComponent(n.iconName);
+                      return (
+                        <div
+                          key={n.id}
+                          className={`flex items-start gap-2.5 p-3 hover:bg-muted/40 transition-colors group rounded-md ${n.unread ? "bg-accent/10" : ""}`}
+                        >
+                          <div className={`size-8 rounded-lg ${n.color} grid place-items-center shrink-0 mt-0.5`}>
+                            <Icon className="size-4" />
+                          </div>
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => markNotificationRead(n.id)}>
+                            <div className={`text-xs text-foreground leading-tight ${n.unread ? "font-semibold" : ""}`}>
+                              {n.title}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground mt-1">{n.time}</div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteNotification(n.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-destructive hover:bg-destructive/10 rounded"
+                            title="Delete"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                <DropdownMenuSeparator />
+                <Link to="/notifications" className="block text-center text-xs text-primary font-semibold py-2 hover:bg-muted/50 rounded-md">
+                  View all notifications
+                </Link>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <div className="flex items-center gap-3 pl-3 border-l border-border">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left">
+                  <button className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left" title="Account settings">
                     <img
-                      src="https://i.pravatar.cc/64?img=12"
+                      src={`https://i.pravatar.cc/64?img=${adminProfile.avatarIndex}`}
                       alt=""
                       className="size-10 rounded-full object-cover"
                     />
                     <div className="hidden sm:block leading-tight">
-                      <div className="font-semibold text-sm">Admin</div>
-                      <div className="text-xs text-muted-foreground">Super Admin</div>
+                      <div className="font-semibold text-sm">{adminProfile.name}</div>
+                      <div className="text-xs text-muted-foreground">{adminProfile.role}</div>
                     </div>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setProfileModalOpen(true)} className="cursor-pointer">
                     <UserCog className="mr-2 size-4" /> Profile Settings
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Settings className="mr-2 size-4" /> Studio Settings
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                  <DropdownMenuItem onClick={logout} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
                     <X className="mr-2 size-4" /> Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -209,6 +276,8 @@ export function DashboardLayout({
 
         <main className="flex-1 p-4 lg:p-8 space-y-6">{children}</main>
       </div>
+      
+      <ProfileSettingsModal open={profileModalOpen} onOpenChange={setProfileModalOpen} />
     </div>
   );
 }
@@ -272,5 +341,149 @@ export function Badge({
     <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${v[variant]}`}>
       {children}
     </span>
+  );
+}
+
+function getIconComponent(name: string) {
+  switch (name) {
+    case "Calendar": return Calendar;
+    case "CreditCard": return CreditCard;
+    case "UserPlus": return UserPlus;
+    case "Mic2": return Mic2;
+    case "CheckCircle2": return CheckCircle2;
+    case "Crown": return Crown;
+    case "Package": return Package;
+    default: return Bell;
+  }
+}
+
+function ProfileSettingsModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { adminProfile, updateAdminProfile } = useAppContext();
+  const [name, setName] = useState(adminProfile.name);
+  const [email, setEmail] = useState(adminProfile.email);
+  const [password, setPassword] = useState("••••••••");
+  const [bio, setBio] = useState(adminProfile.bio || "");
+  const [avatarIndex, setAvatarIndex] = useState(adminProfile.avatarIndex);
+
+  const avatars = [12, 33, 45, 47, 49, 51, 60, 64];
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email) {
+      toast.error("Name and Email are required.");
+      return;
+    }
+    updateAdminProfile({
+      name,
+      email,
+      bio,
+      avatarIndex,
+    });
+    toast.success("Profile updated successfully!");
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Admin Profile Settings</DialogTitle>
+          <DialogDescription>
+            Update your personal details, profile picture and credentials.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSave} className="space-y-4 py-3">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground">Select Profile Avatar</label>
+            <div className="flex gap-3 justify-between items-center py-2 px-3 bg-muted/30 border border-border rounded-xl">
+              <img
+                src={`https://i.pravatar.cc/128?img=${avatarIndex}`}
+                alt="Selected avatar"
+                className="size-16 rounded-xl object-cover ring-2 ring-primary ring-offset-2 shrink-0 bg-background"
+              />
+              <div className="flex flex-wrap gap-2 justify-end">
+                {avatars.map((idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setAvatarIndex(idx)}
+                    title={`Avatar option ${idx}`}
+                    aria-label={`Select avatar option ${idx}`}
+                    className={`size-9 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${avatarIndex === idx ? "border-primary ring-1 ring-primary" : "border-transparent"}`}
+                  >
+                    <img src={`https://i.pravatar.cc/64?img=${idx}`} alt="" className="object-cover size-full" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="profile-name">Full Name</label>
+            <input
+              id="profile-name"
+              required
+              className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              title="Full Name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="profile-email">Email Address</label>
+            <input
+              id="profile-email"
+              type="email"
+              required
+              className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              title="Email Address"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="profile-pwd">Password</label>
+            <input
+              id="profile-pwd"
+              type="password"
+              className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              title="Password"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="profile-bio">Bio / Account Information</label>
+            <textarea
+              id="profile-bio"
+              rows={2}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              title="Bio / Account Information"
+            />
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-border gap-2">
+            <button
+              type="button"
+              className="h-10 px-4 text-sm border border-border rounded-lg hover:bg-accent cursor-pointer"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="h-10 px-4 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 cursor-pointer"
+            >
+              Save Changes
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

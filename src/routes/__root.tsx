@@ -113,8 +113,154 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-import { Toaster } from "sonner";
-import { AppProvider } from "@/contexts/AppContext";
+import { Toaster, toast } from "sonner";
+import { AppProvider, useAppContext } from "@/contexts/AppContext";
+import { Mic2, Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
+import { useState } from "react";
+
+function LoginScreen() {
+  const { login } = useAppContext();
+  const [emailInput, setEmailInput] = useState("admin@podcaststudio.com");
+  const [passwordInput, setPasswordInput] = useState("password");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg("");
+    
+    if (!emailInput || !passwordInput) {
+      setErrorMsg("Please fill in all fields.");
+      return;
+    }
+    
+    setLoading(true);
+    setTimeout(() => {
+      if (emailInput === "admin@podcaststudio.com" && passwordInput === "password") {
+        login();
+        toast.success("Successfully logged in as Admin!");
+      } else {
+        setErrorMsg("Invalid email or password. Hint: admin@podcaststudio.com / password");
+        setLoading(false);
+      }
+    }, 1000);
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/40 to-background p-4">
+      <div className="w-full max-w-md bg-card border border-border rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+        <div className="absolute -top-20 -right-20 size-40 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -left-20 size-40 bg-accent/20 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="text-center mb-8 relative">
+          <div className="inline-grid place-items-center size-14 rounded-2xl bg-accent text-primary mb-3">
+            <Mic2 className="size-8 text-primary" strokeWidth={2.2} />
+          </div>
+          <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
+            PODCAST <span className="text-primary tracking-[0.2em] font-semibold text-sm block">STUDIO</span>
+          </h2>
+          <p className="text-xs text-muted-foreground mt-2">
+            Sign in to manage your studio booking and content distribution portal.
+          </p>
+        </div>
+
+        {errorMsg && (
+          <div className="bg-destructive/10 text-destructive text-xs p-3 rounded-lg border border-destructive/20 mb-5">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="login-email">
+              Email Address
+            </label>
+            <div className="relative mt-1">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                id="login-email"
+                type="email"
+                required
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 pl-10 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                placeholder="admin@podcaststudio.com"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                title="Email Address"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center">
+              <label className="text-xs font-semibold text-muted-foreground" htmlFor="login-password">
+                Password
+              </label>
+              <a href="#" onClick={(e) => { e.preventDefault(); toast.info("Contact system administrator to reset password."); }} className="text-xs text-primary hover:underline font-medium">
+                Forgot password?
+              </a>
+            </div>
+            <div className="relative mt-1">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                id="login-password"
+                type="password"
+                required
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 pl-10 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                placeholder="••••••••"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                title="Password"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 py-1">
+            <input
+              id="login-remember"
+              type="checkbox"
+              className="size-4 rounded border-border text-primary focus:ring-primary bg-background"
+              title="Remember me"
+              defaultChecked
+            />
+            <label htmlFor="login-remember" className="text-xs text-muted-foreground cursor-pointer font-medium">
+              Keep me logged in for 30 days
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full h-11 bg-primary text-primary-foreground font-semibold rounded-lg inline-flex items-center justify-center gap-2 hover:opacity-95 transition-opacity disabled:opacity-50 shadow-md cursor-pointer"
+          >
+            {loading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <>
+                Sign In <ArrowRight className="size-4" />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center border-t border-border pt-4">
+          <span className="text-xs text-muted-foreground">
+            Hint: Admin login credentials are prefilled.
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AppLayoutWrapper() {
+  const { isLoggedIn } = useAppContext();
+  
+  if (!isLoggedIn) {
+    return <LoginScreen />;
+  }
+
+  return <Outlet />;
+}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -122,8 +268,8 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        {/* Intercept layouts if not authenticated */}
+        <AppLayoutWrapper />
         <Toaster position="top-right" />
       </AppProvider>
     </QueryClientProvider>

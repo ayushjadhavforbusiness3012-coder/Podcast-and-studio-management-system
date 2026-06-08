@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useState, useEffect } from "react";
 import { useAppContext, type Invoice } from "@/contexts/AppContext";
 import { toast } from "sonner";
@@ -82,71 +82,88 @@ export function InvoiceFormDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{invoiceToEdit ? "Edit Invoice" : "Create Invoice"}</DialogTitle>
+          <DialogDescription className="sr-only">Form to create or edit an invoice.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Guest / Client Name *</label>
+            <label className="text-sm font-medium" htmlFor="invoice-guest">Guest / Client Name *</label>
             <input
+              id="invoice-guest"
               autoFocus
               className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
               placeholder="e.g. Rahul Verma"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              title="Guest / Client Name"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Email</label>
+            <label className="text-sm font-medium" htmlFor="invoice-email">Email</label>
             <input
+              id="invoice-email"
               type="email"
               className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
               placeholder="rahul@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              title="Email"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Booking / Episode</label>
+            <label className="text-sm font-medium" htmlFor="invoice-show">Booking / Episode</label>
             <input
+              id="invoice-show"
               className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
               placeholder="e.g. Tech Talk"
               value={show}
               onChange={(e) => setShow(e.target.value)}
+              title="Booking / Episode"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Invoice Date</label>
+              <label className="text-sm font-medium" htmlFor="invoice-date">Invoice Date</label>
               <input
+                id="invoice-date"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
+                placeholder="DD MMM YYYY"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                title="Invoice Date"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Due Date</label>
+              <label className="text-sm font-medium" htmlFor="invoice-due">Due Date</label>
               <input
+                id="invoice-due"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
+                placeholder="DD MMM YYYY"
                 value={due}
                 onChange={(e) => setDue(e.target.value)}
+                title="Due Date"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Amount *</label>
+              <label className="text-sm font-medium" htmlFor="invoice-amount">Amount *</label>
               <input
+                id="invoice-amount"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
                 placeholder="₹5,000"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                title="Amount"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Status</label>
+              <label className="text-sm font-medium" htmlFor="invoice-status">Status</label>
               <select
+                id="invoice-status"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as Invoice["status"])}
+                title="Select Status"
               >
                 <option value="Paid">Paid</option>
                 <option value="Pending">Pending</option>

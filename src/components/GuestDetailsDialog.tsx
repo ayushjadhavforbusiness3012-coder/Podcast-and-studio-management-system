@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { type Guest } from "@/contexts/AppContext";
 import { Badge } from "@/components/DashboardLayout";
 
@@ -18,6 +18,7 @@ export function GuestDetailsDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Guest Profile</DialogTitle>
+          <DialogDescription className="sr-only">Detailed profile info for guest</DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-6">
           <div className="flex items-center gap-4">

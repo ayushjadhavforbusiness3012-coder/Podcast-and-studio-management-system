@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { type Episode } from "@/contexts/AppContext";
 import { Badge } from "@/components/DashboardLayout";
 import { Mic2, Clock, CalendarDays } from "lucide-react";
@@ -19,6 +19,7 @@ export function EpisodeDetailsDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Episode Details</DialogTitle>
+          <DialogDescription className="sr-only">Detailed info for the selected episode</DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-6">
           <div className="flex items-center gap-4">

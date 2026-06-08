@@ -12,15 +12,18 @@ import {
   Users,
   CalendarCheck,
   Plus,
-  Crown,
   Mic2,
-  Clock,
-  Video,
   FileText,
   BellRing,
   UserPlus,
-  BarChart3
+  ShieldAlert
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   ResponsiveContainer,
   LineChart,
@@ -47,29 +50,31 @@ export const Route = createFileRoute("/")({
 });
 
 const studioData = [
-  { name: "Studio A", value: 45, color: "#8b5cf6" }, // purple
-  { name: "Studio B", value: 30, color: "#3b82f6" }, // blue
-  { name: "Studio C", value: 25, color: "#10b981" }, // green
+  { name: "Studio A", value: 45, color: "#8b5cf6", bgClass: "bg-[#8b5cf6]" }, // purple
+  { name: "Studio B", value: 30, color: "#3b82f6", bgClass: "bg-[#3b82f6]" }, // blue
+  { name: "Studio C", value: 25, color: "#10b981", bgClass: "bg-[#10b981]" }, // green
 ];
 
-// Helper to format recent booking dates stripping the year value
-const formatRecentBookingTime = (dateStr: string, timeStr: string) => {
-  const datePart = dateStr.replace(/\s*\d{4}/, "").trim(); // "25 May 2025" -> "25 May"
-  const timePart = timeStr.split(" - ")[0];
-  return `${datePart}, ${timePart}`;
-};
+// Helper helper definitions
 
 function Dashboard() {
-  const { bookings, guests, episodes } = useAppContext();
+  const { bookings, guests, episodes, invoices, addNotification, formatDate, formatTime } = useAppContext();
+
+  // Helper to format recent booking dates stripping the year value
+  const formatRecentBookingTime = (dateStr: string, timeStr: string) => {
+    return `${formatDate(dateStr)}, ${formatTime(timeStr).split(" - ")[0]}`;
+  };
   const [formOpen, setFormOpen] = useState(false);
   const [guestFormOpen, setGuestFormOpen] = useState(false);
   const [episodeFormOpen, setEpisodeFormOpen] = useState(false);
 
   // Selector state for Booking Overview
-  const [selectedMonth, setSelectedMonth] = useState("May 2026");
+  const [selectedMonth, setSelectedMonth] = useState(
+    ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][new Date().getMonth()]
+  );
 
   // Selector state for Revenue Overview
-  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Dynamic calculations based on state
   const totalBookings = 1248 + bookings.length;
@@ -86,37 +91,78 @@ function Dashboard() {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [bookings]);
 
-  // Booking Overview Data logic (skip 30th on 31-day months)
+  const monthNames = useMemo(() => [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ], []);
+
+  // Booking Overview Data logic (only from June 2026 onwards, blank otherwise)
   const bookingOverviewData = useMemo(() => {
-    const is31DayMonth = selectedMonth.includes("May") || selectedMonth.includes("July");
-    const days = [1, 5, 10, 15, 20, 25];
-    if (is31DayMonth) {
-      days.push(31); // transitions directly from 25 to 31
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    const currentDay = now.getDate();
+
+    const selIdx = monthNames.indexOf(selectedMonth);
+    
+    // Project was created in June 2026 (index 5)
+    // If before June, show blank
+    if (selIdx < 5) return [];
+    // If in the future, show blank
+    if (selIdx > currentMonthIdx) return [];
+
+    let totalDays = 0;
+    if (selIdx === currentMonthIdx) {
+      totalDays = currentDay;
     } else {
-      days.push(30);
+      totalDays = new Date(currentYear, selIdx + 1, 0).getDate();
     }
-    const mockBookings: Record<number, number> = {
-      1: 12, 5: 18, 10: 15, 15: 25, 20: 22, 25: 30, 30: 28, 31: 29
+
+    const data = [];
+    for (let d = 1; d <= totalDays; d++) {
+      // Seeded random number generator so mock data stays consistent per day/month
+      const val = Math.floor(10 + ((d * 7 + selIdx * 13) % 25));
+      data.push({
+        name: `${selectedMonth.substring(0, 3)} ${d}`,
+        bookings: val
+      });
+    }
+    return data;
+  }, [selectedMonth, monthNames]);
+
+  // Status Summary Counts logic (0 if month is blank/future)
+  const statusSummaryCounts = useMemo(() => {
+    const now = new Date();
+    const currentMonthIdx = now.getMonth();
+    const selIdx = monthNames.indexOf(selectedMonth);
+
+    if (selIdx < 5 || selIdx > currentMonthIdx) {
+      return { confirmed: 0, pending: 0, completed: 0, cancelled: 0 };
+    }
+
+    return {
+      confirmed: bookings.filter(b => b.status === "Confirmed").length + 25,
+      pending: bookings.filter(b => b.status === "Pending").length + 8,
+      completed: bookings.filter(b => b.status === "Completed").length + 15,
+      cancelled: bookings.filter(b => b.status === "Cancelled").length + 3
     };
-    return days.map(d => ({
-      name: `${selectedMonth.split(" ")[0].substring(0, 3)} ${d}`,
-      bookings: mockBookings[d] || 20
-    }));
-  }, [selectedMonth]);
+  }, [selectedMonth, monthNames, bookings]);
 
   // Revenue Overview Data logic
   const revenueOverviewData = useMemo(() => {
-    const systemYear = 2026;
-    const systemMonth = 5; // June is index 5
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const baseRevenue = [45000, 52000, 49000, 63000, 85000, 78000, 90000, 85000, 95000, 100000, 110000, 120000];
 
     return months.map((m, idx) => {
       let revenue = baseRevenue[idx];
-      // Future-Date logic: zero out for months beyond June 2026
-      if (selectedYear > systemYear) {
+      // Future year/month logic:
+      if (selectedYear > currentYear) {
         revenue = 0;
-      } else if (selectedYear === systemYear && idx > systemMonth) {
+      } else if (selectedYear === currentYear && idx > currentMonthIdx) {
         revenue = 0;
       }
       return { name: m, revenue };
@@ -127,9 +173,17 @@ function Dashboard() {
     return revenueOverviewData.reduce((sum, item) => sum + item.revenue, 0);
   }, [revenueOverviewData]);
 
-  // Handle "This Year" drop-down selection (prevent loading years prior to genesis 2025)
-  const genesisYear = 2025;
-  const targetYears = [2025, 2026, 2027, 2028].filter(y => y >= genesisYear);
+  // Dynamic years dropdown starting from genesis year 2026
+  const targetYears = useMemo(() => {
+    const startYear = 2026;
+    const currentYear = new Date().getFullYear();
+    const endYear = Math.max(currentYear + 5, 2030);
+    const years = [];
+    for (let y = startYear; y <= endYear; y++) {
+      years.push(y);
+    }
+    return years;
+  }, []);
 
   return (
     <DashboardLayout
@@ -163,10 +217,20 @@ function Dashboard() {
               className="text-xs border border-border rounded-md px-2 py-1 bg-card cursor-pointer focus:outline-none"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
+              title="Select Month"
             >
-              <option value="May 2026">May 2026</option>
-              <option value="June 2026">June 2026</option>
-              <option value="July 2026">July 2026</option>
+              <option value="January">January</option>
+              <option value="February">February</option>
+              <option value="March">March</option>
+              <option value="April">April</option>
+              <option value="May">May</option>
+              <option value="June">June</option>
+              <option value="July">July</option>
+              <option value="August">August</option>
+              <option value="September">September</option>
+              <option value="October">October</option>
+              <option value="November">November</option>
+              <option value="December">December</option>
             </select>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1">
@@ -177,7 +241,7 @@ function Dashboard() {
                   <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} />
                   <YAxis stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} ticks={[0, 10, 20, 30, 40]} domain={[0, 40]} />
                   <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-                  <Line type="linear" dataKey="bookings" stroke="#8b5cf6" strokeWidth={2.5} activeDot={{ r: 6 }} dot={{ strokeWidth: 2, r: 3 }} />
+                  <Line type="linear" dataKey="bookings" stroke="#8b5cf6" strokeWidth={2.5} activeDot={{ r: 6 }} dot={{ strokeWidth: 2, r: 3 }} isAnimationActive={false} className="booking-overview-line" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -186,19 +250,19 @@ function Dashboard() {
               <h4 className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">Status Summary</h4>
              <div className="flex justify-between items-center text-xs w-full min-w-0 gap-2">
                 <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 bg-muted"><span className="size-2 rounded-full bg-success" />Confirmed</span>
-                <span className="font-semibold text-foreground">{bookings.filter(b => b.status === "Confirmed").length + 25}</span>
+                <span className="font-semibold text-foreground">{statusSummaryCounts.confirmed}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-warning" /> Pending</span>
-                <span className="font-semibold text-foreground">{bookings.filter(b => b.status === "Pending").length + 8}</span>
+                <span className="font-semibold text-foreground">{statusSummaryCounts.pending}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-primary" /> Completed</span>
-                <span className="font-semibold text-foreground">{bookings.filter(b => b.status === "Completed").length + 15}</span>
+                <span className="font-semibold text-foreground">{statusSummaryCounts.completed}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-destructive" /> Cancelled</span>
-                <span className="font-semibold text-foreground">{bookings.filter(b => b.status === "Cancelled").length + 3}</span>
+                <span className="font-semibold text-foreground">{statusSummaryCounts.cancelled}</span>
               </div>
             </div>
           </div>
@@ -212,6 +276,7 @@ function Dashboard() {
               className="text-xs border border-border rounded-md px-2 py-1 bg-card cursor-pointer focus:outline-none"
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
+              title="Select Year"
             >
               {targetYears.map(year => (
                 <option key={year} value={year}>{year}</option>
@@ -228,7 +293,7 @@ function Dashboard() {
                 <BarChart data={revenueOverviewData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
                   <CartesianGrid stroke="#f1f5f9" vertical={false} />
                   <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} />
-                  <YAxis stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} formatter={(v) => `₹${Number(v) / 1000}k`} ticks={[0, 10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000]} domain={[0, 120000]} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} tickFormatter={(v) => `₹${Number(v) / 1000}k`} ticks={[0, 10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000]} domain={[0, 120000]} />
                   <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
                   <Bar dataKey="revenue" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -296,7 +361,7 @@ function Dashboard() {
             {studioData.map((s) => (
               <div key={s.name} className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 font-medium text-foreground">
-                  <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className={`size-2 rounded-full ${s.bgClass}`} />
                   {s.name}
                 </span>
                 <span className="font-bold text-foreground">{s.value}%</span>
@@ -316,16 +381,15 @@ function Dashboard() {
               <div key={item.id} className="grid grid-cols-12 gap-2 py-2 border-b border-border last:border-0 last:pb-0 items-center">
                 {/* Left Block: Shorthand Date */}
                 <div className="col-span-3 text-left">
-                  <div className="text-sm font-bold text-foreground">{item.date.split(" ")[0]}</div>
-                  <div className="text-[10px] text-muted-foreground uppercase font-semibold">{item.date.split(" ")[1]?.substring(0, 3)}</div>
+                  <div className="text-xs font-bold text-foreground truncate" title={formatDate(item.date)}>{formatDate(item.date)}</div>
                 </div>
                 {/* Center Block: Title and timing */}
-                <div className="col-span-6 text-left min-w-0">
+                <div className="col-span-5 text-left min-w-0">
                   <div className="font-semibold text-xs text-foreground truncate">{item.guest}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{item.time.split(" - ")[0]} • {item.studio}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{formatTime(item.time).split(" - ")[0]} • {item.studio}</div>
                 </div>
                 {/* Right Block: Badge */}
-                <div className="col-span-3 text-right">
+                <div className="col-span-4 text-right">
                   <Badge variant={item.sv}>{item.status}</Badge>
                 </div>
               </div>
@@ -402,15 +466,113 @@ function Dashboard() {
               <FileText className="size-4 text-primary shrink-0" />
               <span className="text-xs font-semibold text-foreground">Reports</span>
             </Link>
-            <button
-              onClick={() => {
-                toast.success("Notification dispatch scheduled");
-              }}
-              className="rounded-xl border border-border bg-card hover:bg-muted hover:border-primary/20 hover:text-primary transition-all p-3 flex items-center gap-2 cursor-pointer"
-            >
-              <BellRing className="size-4 text-primary shrink-0" />
-              <span className="text-xs font-semibold text-foreground">Send Alert</span>
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="rounded-xl border border-border bg-card hover:bg-muted hover:border-primary/20 hover:text-primary transition-all p-3 flex items-center gap-2 cursor-pointer w-full text-left font-semibold"
+                >
+                  <BellRing className="size-4 text-primary shrink-0" />
+                  <span className="text-xs font-semibold text-foreground">Send Alert</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-card border border-border rounded-xl shadow-lg p-1 space-y-0.5 z-50">
+                <DropdownMenuItem
+                  onClick={() => {
+                    const unpaid = invoices.filter(inv => inv.status === "Pending" || inv.status === "Overdue");
+                    if (unpaid.length === 0) {
+                      toast.info("All payments are fully paid. No alerts to send!");
+                      return;
+                    }
+                    unpaid.forEach((inv) => {
+                      addNotification(
+                        `Payment reminder email sent to ${inv.name} (${inv.email}) for invoice ${inv.id}`, 
+                        "Payments", 
+                        "BellRing", 
+                        "bg-warning/15 text-warning-foreground"
+                      );
+                    });
+                    toast.success(`Dispatched payment alerts to ${unpaid.length} clients: ${unpaid.map(inv => inv.name).join(", ")}`);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <span className="size-2 rounded-full bg-destructive animate-pulse" />
+                  <span>Unpaid Invoices Alert</span>
+                </DropdownMenuItem>
+                
+                <DropdownMenuItem
+                  onClick={() => {
+                    const now = new Date();
+                    // Upcoming bookings scheduled in future/today
+                    const upcoming = bookings.filter(b => {
+                      const bDate = new Date(b.date);
+                      return (b.status === "Confirmed" || b.status === "Pending") && bDate >= now;
+                    });
+                    
+                    if (upcoming.length === 0) {
+                      toast.info("No upcoming bookings found to alert!");
+                      return;
+                    }
+                    upcoming.forEach((b) => {
+                      addNotification(
+                        `Booking reminder email sent to ${b.guest} for session ${b.id} on ${formatDate(b.date)}`, 
+                        "Bookings", 
+                        "Calendar", 
+                        "bg-primary/15 text-primary-foreground"
+                      );
+                    });
+                    toast.success(`Sent booking reminders to ${upcoming.length} guests: ${upcoming.map(b => b.guest).join(", ")}`);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <span className="size-2 rounded-full bg-success animate-pulse" />
+                  <span>Upcoming Booking Alert</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    const pendingBookings = bookings.filter(b => b.status === "Pending");
+                    if (pendingBookings.length === 0) {
+                      toast.info("No pending booking approvals found!");
+                      return;
+                    }
+                    addNotification(
+                      `Review required: ${pendingBookings.length} booking request(s) are pending approval`,
+                      "System",
+                      "ShieldAlert",
+                      "bg-warning/15 text-warning-foreground"
+                    );
+                    toast.success(`Notified admins to review ${pendingBookings.length} pending booking request(s).`);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <span className="size-2 rounded-full bg-warning animate-pulse" />
+                  <span>Pending Approvals Alert</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    const drafts = episodes.filter(ep => ep.status === "Draft");
+                    if (drafts.length === 0) {
+                      toast.info("No episode drafts found!");
+                      return;
+                    }
+                    drafts.forEach((ep) => {
+                      addNotification(
+                        `Episode Draft reminder: '${ep.title}' is ready for editing/publishing`,
+                        "Episodes",
+                        "Mic2",
+                        "bg-info/15 text-info-foreground"
+                      );
+                    });
+                    toast.success(`Notified editors about ${drafts.length} episode draft(s).`);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <span className="size-2 rounded-full bg-info animate-pulse" />
+                  <span>Episode Drafts Alert</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

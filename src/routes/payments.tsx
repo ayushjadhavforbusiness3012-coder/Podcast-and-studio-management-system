@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useAppContext, type Invoice } from "@/contexts/AppContext";
 import { DashboardLayout, StatCard, Badge } from "@/components/DashboardLayout";
-import { Wallet, FileText, Clock, XCircle, Plus, Search, Filter, RotateCcw, Eye, Download, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, Calendar, Pencil, Trash2 } from "lucide-react";
+import { Wallet, FileText, Clock, XCircle, Plus, Search, Filter, RotateCcw, Eye, Download, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, Pencil, Trash2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { InvoiceFormDialog } from "@/components/InvoiceFormDialog";
 import { InvoiceDetailsDialog } from "@/components/InvoiceDetailsDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,15 +49,19 @@ const months = [
 ];
 
 function Payments() {
-  const { invoices, deleteInvoice } = useAppContext();
+  const { invoices, deleteInvoice, formatDate } = useAppContext();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [overviewMonth, setOverviewMonth] = useState("May");
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Filter and pagination states
+  const [tempStatus, setTempStatus] = useState("All Status");
+  const [tempDate, setTempDate] = useState("");
+
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [targetDate, setTargetDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -91,7 +96,7 @@ function Payments() {
           matchesDate = iDate.getFullYear() === fDate.getFullYear() &&
                         iDate.getMonth() === fDate.getMonth() &&
                         iDate.getDate() === fDate.getDate();
-        } catch (err) {
+        } catch {
           matchesDate = false;
         }
       }
@@ -105,10 +110,19 @@ function Payments() {
     return filteredInvoices.slice(start, start + itemsPerPage);
   }, [filteredInvoices, currentPage, itemsPerPage]);
 
+  const handleApplyFilters = () => {
+    setStatusFilter(tempStatus);
+    setTargetDate(tempDate);
+    setCurrentPage(1);
+    toast.success("Filters applied");
+  };
+
   const handleReset = () => {
-    setSearchQuery("");
+    setTempStatus("All Status");
+    setTempDate("");
     setStatusFilter("All Status");
     setTargetDate("");
+    setSearchQuery("");
     setCurrentPage(1);
     toast.info("Filters reset");
   };
@@ -131,6 +145,12 @@ function Payments() {
               }}
             />
           </div>
+          <button 
+            onClick={() => setExportOpen(true)}
+            className="h-10 px-4 rounded-lg border border-border bg-card text-sm font-medium inline-flex items-center gap-2 hover:bg-muted transition-colors cursor-pointer"
+          >
+            <Download className="size-4" /> Export
+          </button>
           <button 
             className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2 hover:opacity-90 cursor-pointer" 
             onClick={handleNew}
@@ -157,14 +177,15 @@ function Payments() {
             {/* Consolidated 3-column filter row */}
             <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div>
-                <label className="text-xs text-muted-foreground font-semibold">Status</label>
+                <label className="text-xs text-muted-foreground font-semibold" htmlFor="filter-status">Status</label>
                 <select 
+                  id="filter-status"
                   className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  value={statusFilter}
+                  value={tempStatus}
                   onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
+                    setTempStatus(e.target.value);
                   }}
+                  title="Status"
                 >
                   <option value="All Status">All Status</option>
                   <option value="Paid">Paid</option>
@@ -173,20 +194,28 @@ function Payments() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground font-semibold">Date</label>
+                <label className="text-xs text-muted-foreground font-semibold" htmlFor="filter-date">Date</label>
                 <input 
+                  id="filter-date"
                   type="date"
                   className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  value={targetDate}
+                  value={tempDate}
                   onChange={(e) => {
-                    setTargetDate(e.target.value);
-                    setCurrentPage(1);
+                    setTempDate(e.target.value);
                   }}
+                  title="Select date"
                 />
               </div>
               <div className="flex gap-2">
-                <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer shadow-sm"><Filter className="size-4" /> Filter</button>
-                <button onClick={handleReset} className="h-10 px-3 rounded-lg border border-border text-sm inline-flex items-center gap-1.5 hover:bg-muted cursor-pointer transition-all"><RotateCcw className="size-4" /> Reset</button>
+                <button onClick={handleApplyFilters} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer shadow-sm"><Filter className="size-4" /> Filter</button>
+                <button 
+                  onClick={handleReset} 
+                  className="h-10 w-10 rounded-lg border border-border grid place-items-center text-muted-foreground hover:bg-muted cursor-pointer transition-colors"
+                  title="Reset Filters"
+                  aria-label="Reset Filters"
+                >
+                  <RotateCcw className="size-4" />
+                </button>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -200,6 +229,7 @@ function Payments() {
                     <th className="p-4 text-left font-semibold">Due Date</th>
                     <th className="p-4 text-left font-semibold">Amount</th>
                     <th className="p-4 text-left font-semibold">Status</th>
+                    <th className="p-4 text-left font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -225,17 +255,17 @@ function Payments() {
                     </td>
                     <td className="p-4">
                       <div>{i.show}</div>
-                      <div className="text-xs text-muted-foreground">{i.date}</div>
+                      <div className="text-xs text-muted-foreground">{formatDate(i.date)}</div>
                     </td>
-                    <td className="p-4">{i.date}</td>
-                    <td className="p-4">{i.due}</td>
+                    <td className="p-4">{formatDate(i.date)}</td>
+                    <td className="p-4">{formatDate(i.due)}</td>
                     <td className="p-4 font-semibold text-foreground">{i.amount}</td>
                     <td className="p-4"><Badge variant={statusVariant[i.status]}>{i.status}</Badge></td>
                     <td className="p-4">
                       <div className="flex gap-1">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-accent cursor-pointer"><MoreVertical className="size-4" /></button>
+                            <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-accent cursor-pointer" title="Action Menu" aria-label="Action Menu"><MoreVertical className="size-4" /></button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleView(i)}><Eye className="mr-2 size-4" /> View Details</DropdownMenuItem>
@@ -271,8 +301,8 @@ function Payments() {
                 Showing {Math.min(filteredInvoices.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredInvoices.length, currentPage * itemsPerPage)} of {filteredInvoices.length} invoices
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronsLeft className="size-4" /></button>
-                <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronLeft className="size-4" /></button>
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer" title="First page" aria-label="First page"><ChevronsLeft className="size-4" /></button>
+                <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer" title="Previous page" aria-label="Previous page"><ChevronLeft className="size-4" /></button>
                 {Array.from({ length: totalPages || 1 }, (_, i) => i + 1).map((p) => (
                   <button
                     key={p}
@@ -282,12 +312,14 @@ function Payments() {
                         ? "bg-primary text-primary-foreground font-bold"
                         : "border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
                     }`}
+                    title={`Page ${p}`}
+                    aria-label={`Page ${p}`}
                   >
                     {p}
                   </button>
                 ))}
-                <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages || totalPages === 0} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronRight className="size-4" /></button>
-                <button onClick={() => setCurrentPage(totalPages || 1)} disabled={currentPage === totalPages || totalPages === 0} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer"><ChevronsRight className="size-4" /></button>
+                <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages || totalPages === 0} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer" title="Next page" aria-label="Next page"><ChevronRight className="size-4" /></button>
+                <button onClick={() => setCurrentPage(totalPages || 1)} disabled={currentPage === totalPages || totalPages === 0} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer" title="Last page" aria-label="Last page"><ChevronsRight className="size-4" /></button>
               </div>
             </div>
           </div>
@@ -305,24 +337,49 @@ function Payments() {
                   toast.info(`Showing Payment Overview for ${e.target.value}`);
                 }}
                 className="text-xs border border-border rounded-md px-2 py-1 bg-card cursor-pointer focus:outline-none"
+                title="Select month"
               >
                 {months.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
-            <div className="flex items-center gap-6 py-2 flex-wrap sm:flex-nowrap">
-              <div className="relative shrink-0">
+            <div className="flex flex-col items-center justify-center pt-2">
+              <div className="relative shrink-0 mb-6">
                 <Donut />
                 <div className="absolute inset-0 grid place-items-center text-center">
                   <div>
-                    <div className="text-base font-bold text-foreground">₹1,45,000</div>
-                    <div className="text-[9px] text-muted-foreground uppercase font-medium">Total Revenue</div>
+                    <div className="text-lg font-bold text-foreground">₹1,45,000</div>
+                    <div className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Total Revenue</div>
                   </div>
                 </div>
               </div>
-              <div className="flex-1 space-y-3 text-xs">
-                <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-success" />Paid</span><span className="font-bold text-foreground">₹1,10,000 (76%)</span></div>
-                <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-warning" />Pending</span><span className="font-bold text-foreground">₹25,000 (17%)</span></div>
-                <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-destructive" />Overdue</span><span className="font-bold text-foreground">₹10,000 (7%)</span></div>
+              <div className="w-full space-y-3 border-t border-border pt-4 text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="size-3 rounded-full bg-success" />
+                    <span className="font-medium text-muted-foreground">Paid</span>
+                  </div>
+                  <span className="font-semibold text-foreground">
+                    ₹1,10,000<span className="text-xs font-normal text-muted-foreground ml-1.5">(76%)</span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="size-3 rounded-full bg-warning" />
+                    <span className="font-medium text-muted-foreground">Pending</span>
+                  </div>
+                  <span className="font-semibold text-foreground">
+                    ₹25,000<span className="text-xs font-normal text-muted-foreground ml-1.5">(17%)</span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="size-3 rounded-full bg-destructive" />
+                    <span className="font-medium text-muted-foreground">Overdue</span>
+                  </div>
+                  <span className="font-semibold text-foreground">
+                    ₹10,000<span className="text-xs font-normal text-muted-foreground ml-1.5">(7%)</span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -349,7 +406,7 @@ function Payments() {
                     </div>
                     <div className="text-right">
                       <div className="font-semibold">{t.amt}</div>
-                      <div className="text-[10px] text-muted-foreground">{t.date}</div>
+                      <div className="text-[10px] text-muted-foreground">{formatDate(t.date)}</div>
                     </div>
                   </div>
                 );
@@ -363,6 +420,67 @@ function Payments() {
 
       <InvoiceFormDialog open={formOpen} onOpenChange={setFormOpen} invoiceToEdit={selectedInvoice || undefined} />
       <InvoiceDetailsDialog open={detailsOpen} onOpenChange={setDetailsOpen} invoice={selectedInvoice} />
+
+      {/* Export Payments Dialog */}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Export Payments</DialogTitle>
+            <DialogDescription>Select your preferred format for the exported payments list.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <button
+              onClick={() => {
+                setExportOpen(false);
+                toast.success("Preparing PDF print layout...");
+                setTimeout(() => {
+                  window.print();
+                }, 500);
+              }}
+              className="flex flex-col items-center justify-center p-4 border border-border rounded-xl hover:border-primary/40 hover:bg-muted/50 cursor-pointer transition-all bg-transparent"
+            >
+              <FileText className="size-8 text-primary mb-2" />
+              <span className="font-semibold text-sm">Print / PDF</span>
+              <span className="text-[10px] text-muted-foreground mt-1 text-center">Print layout optimized for paper or PDF</span>
+            </button>
+            <button
+              onClick={() => {
+                setExportOpen(false);
+                let csvContent = "data:text/csv;charset=utf-8," 
+                  + "Invoice ID,Client Name,Email,Show Name,Invoice Date,Due Date,Amount,Status\n";
+                
+                filteredInvoices.forEach((inv) => {
+                  const row = [
+                    inv.id,
+                    `"${inv.name.replace(/"/g, '""')}"`,
+                    inv.email,
+                    `"${inv.show.replace(/"/g, '""')}"`,
+                    inv.date,
+                    inv.due,
+                    `"${inv.amount.replace(/"/g, '""')}"`,
+                    inv.status
+                  ].join(",");
+                  csvContent += row + "\n";
+                });
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `payments_export_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast.success("Payments CSV downloaded successfully!");
+              }}
+              className="flex flex-col items-center justify-center p-4 border border-border rounded-xl hover:border-primary/40 hover:bg-muted/50 cursor-pointer transition-all bg-transparent"
+            >
+              <Download className="size-8 text-success mb-2" />
+              <span className="font-semibold text-sm">Spreadsheet (CSV)</span>
+              <span className="text-[10px] text-muted-foreground mt-1 text-center">Export raw payments for Excel / Google Sheets</span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

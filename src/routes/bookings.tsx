@@ -9,22 +9,21 @@ import {
   Search,
   Pencil,
   Eye,
-  MoreVertical,
   Trash2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RotateCcw,
+  Filter,
+  Download,
+  FileText
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAppContext, type Booking } from "@/contexts/AppContext";
 import { BookingFormDialog } from "@/components/BookingFormDialog";
 import { BookingDetailsDialog } from "@/components/BookingDetailsDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useState, useMemo } from "react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 
 export const Route = createFileRoute("/bookings")({
   head: () => ({ meta: [{ title: "Studio Bookings — Podcast Studio" }] }),
@@ -32,13 +31,19 @@ export const Route = createFileRoute("/bookings")({
 });
 
 function Bookings() {
-  const { bookings, deleteBooking, searchQuery, setSearchQuery } = useAppContext();
+  const { bookings, deleteBooking, searchQuery, setSearchQuery, formatDate, formatTime } = useAppContext();
   
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
-  // Filter Bar state
+  // Filter Bar draft state
+  const [tempStudio, setTempStudio] = useState("All Studios");
+  const [tempStatus, setTempStatus] = useState("All Statuses");
+  const [tempDate, setTempDate] = useState("");
+
+  // Filter Bar applied state
   const [studioFilter, setStudioFilter] = useState("All Studios");
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [targetDate, setTargetDate] = useState("");
@@ -122,7 +127,18 @@ function Bookings() {
     }
   };
 
+  const handleApplyFilters = () => {
+    setStudioFilter(tempStudio);
+    setStatusFilter(tempStatus);
+    setTargetDate(tempDate);
+    setCurrentPage(1);
+    toast.success("Filters applied");
+  };
+
   const handleReset = () => {
+    setTempStudio("All Studios");
+    setTempStatus("All Statuses");
+    setTempDate("");
     setStudioFilter("All Studios");
     setStatusFilter("All Statuses");
     setTargetDate("");
@@ -149,6 +165,12 @@ function Bookings() {
               }}
             />
           </div>
+          <button 
+            onClick={() => setExportOpen(true)}
+            className="h-10 px-4 rounded-lg border border-border bg-card text-sm font-medium inline-flex items-center gap-2 hover:bg-muted transition-colors cursor-pointer"
+          >
+            <Download className="size-4" /> Export
+          </button>
           <button onClick={handleNew} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2 hover:opacity-90 transition-all shadow-sm">
             <Plus className="size-4" /> New Booking
           </button>
@@ -167,30 +189,35 @@ function Bookings() {
       <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
-            <label className="text-xs font-semibold text-muted-foreground">Filter by Studio</label>
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="filter-studio">Filter by Studio</label>
             <select 
+              id="filter-studio"
               className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-              value={studioFilter}
+              value={tempStudio}
               onChange={(e) => {
-                setStudioFilter(e.target.value);
-                setCurrentPage(1);
+                setTempStudio(e.target.value);
               }}
+              title="Filter by Studio"
             >
               <option>All Studios</option>
               <option>Studio A</option>
               <option>Studio B</option>
               <option>Studio C</option>
+              <option>Main Studio</option>
+              <option>Mini Studio</option>
+              <option>Premium Studio</option>
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold text-muted-foreground">Filter by Status</label>
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="filter-status">Filter by Status</label>
             <select 
+              id="filter-status"
               className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-              value={statusFilter}
+              value={tempStatus}
               onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
+                setTempStatus(e.target.value);
               }}
+              title="Filter by Status"
             >
               <option>All Statuses</option>
               <option>Confirmed</option>
@@ -200,29 +227,32 @@ function Bookings() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold text-muted-foreground">Date</label>
+            <label className="text-xs font-semibold text-muted-foreground" htmlFor="filter-date">Date</label>
             <input 
+              id="filter-date"
               type="date"
               className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-              value={targetDate}
+              value={tempDate}
               onChange={(e) => {
-                setTargetDate(e.target.value);
-                setCurrentPage(1);
+                setTempDate(e.target.value);
               }}
+              title="Select date"
             />
           </div>
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => toast.success("Filters applied")} 
+              onClick={handleApplyFilters} 
               className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5 hover:opacity-90 transition-all cursor-pointer shadow-sm"
             >
-              Filter
+              <Filter className="size-4" /> Filter
             </button>
             <button 
               onClick={handleReset} 
-              className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors cursor-pointer"
+              className="h-10 w-10 rounded-lg border border-border grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+              title="Reset Filters"
+              aria-label="Reset Filters"
             >
-              Reset
+              <RotateCcw className="size-4" />
             </button>
           </div>
         </div>
@@ -264,8 +294,8 @@ function Bookings() {
                     <td className="p-4 font-medium text-foreground">{r.studio}</td>
                     <td className="p-4">{r.guest}</td>
                     <td className="p-4">
-                      <div className="font-medium">{r.date}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{r.time}</div>
+                      <div className="font-medium">{formatDate(r.date)}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{formatTime(r.time)}</div>
                     </td>
                     <td className="p-4 text-muted-foreground font-medium">{getDuration(r)}</td>
                     <td className="p-4">
@@ -315,6 +345,8 @@ function Bookings() {
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
               className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none transition-all"
+              title="Previous page"
+              aria-label="Previous page"
             >
               <ChevronLeft className="size-4" />
             </button>
@@ -327,6 +359,8 @@ function Bookings() {
                     ? "bg-primary text-primary-foreground"
                     : "border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
                 }`}
+                title={`Page ${p}`}
+                aria-label={`Page ${p}`}
               >
                 {p}
               </button>
@@ -335,6 +369,8 @@ function Bookings() {
               onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages || totalPages === 0}
               className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none transition-all"
+              title="Next page"
+              aria-label="Next page"
             >
               <ChevronRight className="size-4" />
             </button>
@@ -352,6 +388,68 @@ function Bookings() {
         onOpenChange={setDetailsOpen} 
         booking={selectedBooking} 
       />
+
+      {/* Export Bookings Dialog */}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Export Bookings</DialogTitle>
+            <DialogDescription>Select your preferred format for the exported studio bookings list.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <button
+              onClick={() => {
+                setExportOpen(false);
+                toast.success("Preparing PDF print layout...");
+                setTimeout(() => {
+                  window.print();
+                }, 500);
+              }}
+              className="flex flex-col items-center justify-center p-4 border border-border rounded-xl hover:border-primary/40 hover:bg-muted/50 cursor-pointer transition-all bg-transparent"
+            >
+              <FileText className="size-8 text-primary mb-2" />
+              <span className="font-semibold text-sm">Print / PDF</span>
+              <span className="text-[10px] text-muted-foreground mt-1 text-center">Print layout optimized for paper or PDF</span>
+            </button>
+            <button
+              onClick={() => {
+                setExportOpen(false);
+                // CSV formatting:
+                let csvContent = "data:text/csv;charset=utf-8," 
+                  + "Booking ID,Studio,Guest / Client,Date,Time,Duration,Status,Amount\n";
+                
+                filteredBookings.forEach((b) => {
+                  const row = [
+                    b.id,
+                    b.studio,
+                    `"${b.guest.replace(/"/g, '""')}"`,
+                    b.date,
+                    `"${b.time.replace(/"/g, '""')}"`,
+                    b.duration !== undefined ? `${b.duration} Hours` : "2 Hours",
+                    b.status,
+                    `"${b.amt.replace(/"/g, '""')}"`
+                  ].join(",");
+                  csvContent += row + "\n";
+                });
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `bookings_export_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast.success("Bookings CSV downloaded successfully!");
+              }}
+              className="flex flex-col items-center justify-center p-4 border border-border rounded-xl hover:border-primary/40 hover:bg-muted/50 cursor-pointer transition-all bg-transparent"
+            >
+              <Download className="size-8 text-success mb-2" />
+              <span className="font-semibold text-sm">Spreadsheet (CSV)</span>
+              <span className="text-[10px] text-muted-foreground mt-1 text-center">Export raw bookings for Excel / Google Sheets</span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

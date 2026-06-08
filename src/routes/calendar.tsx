@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
-import { useAppContext, type Booking } from "@/contexts/AppContext";
+import { ChevronLeft, ChevronRight, Plus, Search, RotateCcw } from "lucide-react";
+import { useAppContext } from "@/contexts/AppContext";
 import { BookingFormDialog } from "@/components/BookingFormDialog";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/calendar")({
 });
 
 function CalendarPage() {
-  const { bookings, searchQuery, setSearchQuery } = useAppContext();
+  const { bookings, searchQuery, setSearchQuery, formatDate, formatTime } = useAppContext();
   
   const [formOpen, setFormOpen] = useState(false);
   const [selectedDateForModal, setSelectedDateForModal] = useState("");
@@ -42,7 +42,7 @@ function CalendarPage() {
   const parseBookingDate = (dateStr: string) => {
     try {
       return new Date(dateStr);
-    } catch (e) {
+    } catch {
       return new Date(0);
     }
   };
@@ -133,6 +133,16 @@ function CalendarPage() {
     toast.success("Filters applied successfully!");
   };
 
+  const handleResetFilters = () => {
+    setTempStudio("All Studios");
+    setTempStatus("All Statuses");
+    setActiveStudio("All Studios");
+    setActiveStatus("All Statuses");
+    setSearchQuery("");
+    setCurrentDate(new Date());
+    toast.info("Filters reset");
+  };
+
   // Chronological upcoming bookings sorting
   const sortedUpcomingBookings = useMemo(() => {
     const now = new Date();
@@ -196,12 +206,16 @@ function CalendarPage() {
               <button 
                 onClick={handlePrevMonth}
                 className="size-9 rounded-lg border border-border grid place-items-center hover:bg-muted cursor-pointer transition-colors"
+                title="Previous month"
+                aria-label="Previous month"
               >
                 <ChevronLeft className="size-4" />
               </button>
               <button 
                 onClick={handleNextMonth}
                 className="size-9 rounded-lg border border-border grid place-items-center hover:bg-muted cursor-pointer transition-colors"
+                title="Next month"
+                aria-label="Next month"
               >
                 <ChevronRight className="size-4" />
               </button>
@@ -272,9 +286,9 @@ function CalendarPage() {
           {/* Mini Sidebar Calendar */}
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3.5">
-              <button onClick={handlePrevMonth} className="hover:bg-muted p-1 rounded cursor-pointer transition-colors"><ChevronLeft className="size-4" /></button>
+              <button onClick={handlePrevMonth} className="hover:bg-muted p-1 rounded cursor-pointer transition-colors" title="Previous month" aria-label="Previous month"><ChevronLeft className="size-4" /></button>
               <div className="font-bold text-sm text-foreground">{currentMonthYearName}</div>
-              <button onClick={handleNextMonth} className="hover:bg-muted p-1 rounded cursor-pointer transition-colors"><ChevronRight className="size-4" /></button>
+              <button onClick={handleNextMonth} className="hover:bg-muted p-1 rounded cursor-pointer transition-colors" title="Next month" aria-label="Next month"><ChevronRight className="size-4" /></button>
             </div>
             <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-muted-foreground mb-1">
               {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => <div key={d} className="p-1 uppercase">{d}</div>)}
@@ -305,24 +319,31 @@ function CalendarPage() {
             <h3 className="font-bold text-sm text-foreground">Filter Bookings</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-muted-foreground font-semibold">Filter by Studio</label>
+                <label className="text-xs text-muted-foreground font-semibold" htmlFor="calendar-filter-studio">Filter by Studio</label>
                 <select 
+                  id="calendar-filter-studio"
                   className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none"
                   value={tempStudio}
                   onChange={(e) => setTempStudio(e.target.value)}
+                  title="Filter by Studio"
                 >
                   <option value="All Studios">All Studios</option>
                   <option value="Studio A">Studio A</option>
                   <option value="Studio B">Studio B</option>
                   <option value="Studio C">Studio C</option>
+                  <option value="Main Studio">Main Studio</option>
+                  <option value="Mini Studio">Mini Studio</option>
+                  <option value="Premium Studio">Premium Studio</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground font-semibold">Filter by Status</label>
+                <label className="text-xs text-muted-foreground font-semibold" htmlFor="calendar-filter-status">Filter by Status</label>
                 <select 
+                  id="calendar-filter-status"
                   className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none"
                   value={tempStatus}
                   onChange={(e) => setTempStatus(e.target.value)}
+                  title="Filter by Status"
                 >
                   <option value="All Statuses">All Statuses</option>
                   <option value="Confirmed">Confirmed</option>
@@ -332,13 +353,23 @@ function CalendarPage() {
                 </select>
               </div>
             </div>
-            {/* Filter automation execution button */}
-            <button 
-              onClick={handleApplyFilter}
-              className="w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer shadow-sm mt-2"
-            >
-              Filter
-            </button>
+            {/* Filter automation execution buttons */}
+            <div className="flex gap-2 mt-2">
+              <button 
+                onClick={handleApplyFilter}
+                className="flex-1 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+              >
+                Filter
+              </button>
+              <button 
+                onClick={handleResetFilters}
+                className="h-10 w-10 shrink-0 rounded-lg border border-border grid place-items-center text-muted-foreground hover:bg-muted cursor-pointer transition-colors"
+                title="Reset Filters"
+                aria-label="Reset Filters"
+              >
+                <RotateCcw className="size-4" />
+              </button>
+            </div>
           </div>
 
           {/* Upcoming Bookings chronological stack with vertical scrolling */}
@@ -349,7 +380,7 @@ function CalendarPage() {
                 <div key={u.id} className="flex items-start gap-3 pb-3 border-b border-border last:border-0 last:pb-0">
                   <span className={`size-2 rounded-full mt-2 shrink-0 ${getDotColor(u.sv)}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-muted-foreground font-medium">{u.date}, {u.time.includes("to") ? u.time : u.time.split(" - ")[0]}</div>
+                    <div className="text-[10px] text-muted-foreground font-medium">{formatDate(u.date)}, {formatTime(u.time.includes("to") ? u.time : u.time.split(" - ")[0])}</div>
                     <div className="font-semibold text-xs text-foreground truncate mt-0.5">{u.guest}</div>
                     <div className="text-[10px] text-muted-foreground truncate">{u.studio}</div>
                   </div>

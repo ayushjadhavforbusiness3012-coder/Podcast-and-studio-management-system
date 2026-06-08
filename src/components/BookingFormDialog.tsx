@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useState, useEffect } from "react";
 import { useAppContext, type Booking } from "@/contexts/AppContext";
 import { toast } from "sonner";
@@ -189,25 +189,30 @@ export function BookingFormDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{bookingToEdit ? "Edit Booking" : "New Booking"}</DialogTitle>
+          <DialogDescription className="sr-only">Form to create or edit a studio booking.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Guest Name</label>
+            <label className="text-sm font-medium" htmlFor="booking-guest">Guest Name</label>
             <input
+              id="booking-guest"
               autoFocus
               className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               placeholder="e.g. Rahul Verma"
               value={guest}
               onChange={(e) => setGuest(e.target.value)}
+              title="Guest Name"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Studio</label>
+              <label className="text-sm font-medium" htmlFor="booking-studio">Studio</label>
               <select
+                id="booking-studio"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={studio}
                 onChange={(e) => setStudio(e.target.value)}
+                title="Select Studio"
               >
                 <option>Studio A</option>
                 <option>Studio B</option>
@@ -218,11 +223,13 @@ export function BookingFormDialog({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Package</label>
+              <label className="text-sm font-medium" htmlFor="booking-package">Package</label>
               <select
+                id="booking-package"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={pkg}
                 onChange={(e) => setPkg(e.target.value)}
+                title="Select Package"
               >
                 <option>Basic Package</option>
                 <option>Standard Package</option>
@@ -233,23 +240,45 @@ export function BookingFormDialog({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Date</label>
+              <label className="text-sm font-medium" htmlFor="booking-date">Date</label>
               <input
+                id="booking-date"
                 type="text"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 placeholder="25 May 2025"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                title="Date"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Duration (Hours)</label>
+              <label className="text-sm font-medium" htmlFor="booking-duration">Duration (Hours)</label>
               <input
+                id="booking-duration"
                 type="number"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 placeholder="e.g. 2"
                 value={duration}
-                onChange={(e) => setDuration(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                onChange={(e) => {
+                  const valStr = e.target.value;
+                  if (valStr === "") {
+                    setDuration("");
+                  } else {
+                    const val = parseInt(valStr, 10);
+                    setDuration(val);
+                    if (val > 0) {
+                      const sh = parseInt(startSlot.split(":")[0], 10);
+                      const eh = sh + val;
+                      if (eh <= 24) {
+                        setEndSlot(`${String(eh).padStart(2, "0")}:00`);
+                      } else {
+                        setEndSlot("24:00");
+                        setDuration(24 - sh);
+                      }
+                    }
+                  }
+                }}
+                title="Duration in Hours"
               />
             </div>
           </div>
@@ -257,11 +286,13 @@ export function BookingFormDialog({
           {/* Aligned Start and End Time dropdown matrices */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Starting Time Slot</label>
+              <label className="text-sm font-medium" htmlFor="booking-start-slot">Starting Time Slot</label>
               <select
+                id="booking-start-slot"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={startSlot}
                 onChange={(e) => handleStartSlotChange(e.target.value)}
+                title="Select Starting Time Slot"
               >
                 {START_SLOTS.map((slot, i) => {
                   // Block/gray out if [i, i+1] is occupied
@@ -275,11 +306,13 @@ export function BookingFormDialog({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Ending Time Slot</label>
+              <label className="text-sm font-medium" htmlFor="booking-end-slot">Ending Time Slot</label>
               <select
+                id="booking-end-slot"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={endSlot}
                 onChange={(e) => handleEndSlotChange(e.target.value)}
+                title="Select Ending Time Slot"
               >
                 {END_SLOTS.map((slot, i) => {
                   const hour = i + 1;
@@ -298,11 +331,13 @@ export function BookingFormDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Status</label>
+            <label className="text-sm font-medium" htmlFor="booking-status">Status</label>
             <select
+              id="booking-status"
               className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               value={status}
               onChange={(e) => setStatus(e.target.value as Booking["status"])}
+              title="Select Status"
             >
               <option>Confirmed</option>
               <option>Pending</option>

@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout, StatCard, Badge } from "@/components/DashboardLayout";
-import { Users, CheckCircle2, ShieldCheck, Pencil, Eye, Plus, Search, Filter, RotateCcw, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserPlus, ArrowRight, CheckCircle, UserCog, Trash2, X } from "lucide-react";
-import { useAppContext, type User } from "@/contexts/AppContext";
+import { Users, CheckCircle2, ShieldCheck, Pencil, Eye, Filter, RotateCcw, ChevronLeft, ChevronRight, UserCog, Trash2, CheckCircle, Plus, Download, FileText } from "lucide-react";
+import { useAppContext } from "@/contexts/AppContext";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/users")({
   head: () => ({ meta: [{ title: "Users — Podcast Studio" }] }),
@@ -11,32 +12,31 @@ export const Route = createFileRoute("/users")({
 });
 
 function UsersPage() {
-  const { users, addUser, updateUser, deleteUser } = useAppContext();
+  const { users, addUser, updateUser, deleteUser, formatDate } = useAppContext();
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [tempRole, setTempRole] = useState("All Roles");
+  const [tempStatus, setTempStatus] = useState("All Statuses");
   const [roleFilter, setRoleFilter] = useState("All Roles");
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set());
-  const [showAddDialog, setShowAddDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  // Add user form state
+  const [exportOpen, setExportOpen] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState("Viewer");
+  const [newRole, setNewRole] = useState("Editor");
 
   const filteredUsers = useMemo(() => {
     return users
       .map((u, i) => ({ ...u, _idx: i }))
       .filter((u) => {
-        const q = searchQuery.toLowerCase();
-        const matchesSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
         const matchesRole = roleFilter === "All Roles" || u.role === roleFilter;
         const matchesStatus = statusFilter === "All Statuses" || u.status === statusFilter;
-        return matchesSearch && matchesRole && matchesStatus;
+        return matchesRole && matchesStatus;
       });
-  }, [users, searchQuery, roleFilter, statusFilter]);
+  }, [users, roleFilter, statusFilter]);
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
   const paginatedUsers = useMemo(() => {
@@ -59,11 +59,20 @@ function UsersPage() {
     }
   };
 
+  const handleApplyFilters = () => {
+    setRoleFilter(tempRole);
+    setStatusFilter(tempStatus);
+    setCurrentPage(1);
+    toast.success("Filters applied");
+  };
+
   const handleReset = () => {
-    setSearchQuery("");
+    setTempRole("All Roles");
+    setTempStatus("All Statuses");
     setRoleFilter("All Roles");
     setStatusFilter("All Statuses");
     setSelectedIdxs(new Set());
+    setCurrentPage(1);
     toast.info("Filters reset");
   };
 
@@ -81,29 +90,6 @@ function UsersPage() {
     toast.success(`${u.name} is now ${newStatus}`);
   };
 
-  const handleAddUser = () => {
-    if (!newName.trim() || !newEmail.trim()) {
-      toast.error("Name and email are required");
-      return;
-    }
-    const roleV = newRole === "Super Admin" || newRole === "Admin" ? "primary" : newRole === "Editor" ? "info" : "warning";
-    addUser({
-      name: newName,
-      email: newEmail,
-      role: newRole,
-      roleV,
-      status: "Active",
-      joined: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
-      last: "Just now",
-      img: Math.floor(Math.random() * 70),
-    });
-    toast.success(`${newName} added successfully`);
-    setNewName("");
-    setNewEmail("");
-    setNewRole("Viewer");
-    setShowAddDialog(false);
-  };
-
   const activeCount = users.filter((u) => u.status === "Active").length;
   const adminCount = users.filter((u) => u.role === "Super Admin" || u.role === "Admin").length;
   const editorCount = users.filter((u) => u.role === "Editor").length;
@@ -115,27 +101,26 @@ function UsersPage() {
       subtitle="Manage team members and user permissions"
       actions={
         <>
-          <div className="relative hidden md:block">
-            <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              placeholder="Search users by name, email..."
-              className="h-10 w-72 rounded-lg border border-border bg-card pl-9 pr-3 text-sm focus:outline-none"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-            />
-          </div>
-          <button onClick={() => toast.success("Filters applied")} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5 hover:opacity-90 transition-all cursor-pointer shadow-sm">
-            <Filter className="size-4" /> Filter
-          </button>
           {selectedIdxs.size > 0 && (
-            <button onClick={handleDeleteSelected} className="h-10 px-4 rounded-lg border border-destructive/30 text-destructive bg-destructive/10 text-sm font-medium inline-flex items-center gap-2">
+            <button onClick={handleDeleteSelected} className="h-10 px-4 rounded-lg border border-destructive/30 text-destructive bg-destructive/10 text-sm font-medium inline-flex items-center gap-2 cursor-pointer">
               <Trash2 className="size-4" /> Delete ({selectedIdxs.size})
             </button>
           )}
-          <button onClick={() => setShowAddDialog(true)} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2 shadow-sm">
+          <button 
+            onClick={() => setExportOpen(true)}
+            className="h-10 px-4 rounded-lg border border-border bg-card text-sm font-medium inline-flex items-center gap-2 hover:bg-muted transition-colors cursor-pointer"
+          >
+            <Download className="size-4" /> Export
+          </button>
+          <button 
+            onClick={() => {
+              setNewName("");
+              setNewEmail("");
+              setNewRole("Editor");
+              setShowAddDialog(true);
+            }} 
+            className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-2 hover:opacity-90 transition-all shadow-sm cursor-pointer"
+          >
             <Plus className="size-4" /> Add User
           </button>
         </>
@@ -152,16 +137,10 @@ function UsersPage() {
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
         <div className="space-y-6">
           <div className="bg-card border border-border rounded-2xl p-5">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-              <input
-                placeholder="Search users..."
-                className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div>
-                <label className="text-xs text-muted-foreground">Role</label>
-                <select className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                <label className="text-xs text-muted-foreground font-medium" htmlFor="filter-role">Role</label>
+                <select id="filter-role" className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" value={tempRole} onChange={(e) => setTempRole(e.target.value)} title="Role">
                   <option>All Roles</option>
                   <option>Super Admin</option>
                   <option>Admin</option>
@@ -170,16 +149,26 @@ function UsersPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Status</label>
-                <select className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <label className="text-xs text-muted-foreground font-medium" htmlFor="filter-status">Status</label>
+                <select id="filter-status" className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" value={tempStatus} onChange={(e) => setTempStatus(e.target.value)} title="Status">
                   <option>All Statuses</option>
                   <option>Active</option>
                   <option>Inactive</option>
                 </select>
               </div>
-              <button onClick={handleReset} className="h-10 px-3 rounded-lg border border-border text-sm inline-flex items-center gap-1.5 hover:bg-muted">
-                <RotateCcw className="size-4" /> Reset
-              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={handleApplyFilters} className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer shadow-sm">
+                  <Filter className="size-4" /> Filter
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="h-10 px-4 rounded-lg border border-border bg-card text-sm font-medium inline-flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  title="Reset Filters"
+                  aria-label="Reset Filters"
+                >
+                  <RotateCcw className="size-4" /> Reset
+                </button>
+              </div>
             </div>
           </div>
 
@@ -194,6 +183,8 @@ function UsersPage() {
                         checked={selectedIdxs.size === filteredUsers.length && filteredUsers.length > 0}
                         onChange={handleToggleAll}
                         className="size-4 rounded border-border"
+                        title="Select all users"
+                        aria-label="Select all users"
                       />
                     </th>
                     <th className="p-4 text-left font-medium">User</th>
@@ -219,48 +210,50 @@ function UsersPage() {
                             checked={selectedIdxs.has(u._idx)}
                             onChange={() => handleToggleSelect(u._idx)}
                             className="size-4 rounded border-border ml-1"
+                            title={`Select user ${u.name}`}
+                            aria-label={`Select user ${u.name}`}
                           />
                         </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <img src={`https://i.pravatar.cc/64?img=${u.img}`} className="size-9 rounded-full" alt="" />
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{u.name}</span>
-                            {u.you && <Badge variant="primary">You</Badge>}
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <img src={`https://i.pravatar.cc/64?img=${u.img}`} className="size-9 rounded-full" alt="" />
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{u.name}</span>
+                              {u.you && <Badge variant="primary">You</Badge>}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4 text-muted-foreground">{u.email}</td>
-                      <td className="p-4"><Badge variant={u.roleV as any}>{u.role}</Badge></td>
-                      <td className="p-4">
-                        <button onClick={() => handleToggleStatus(u._idx)} className="cursor-pointer">
-                          <Badge variant={u.status === "Active" ? "success" : "destructive"}>{u.status}</Badge>
-                        </button>
-                      </td>
-                      <td className="p-4">{u.joined}</td>
-                      <td className="p-4 text-muted-foreground">{u.last}</td>
-                      <td className="p-4">
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleToggleStatus(u._idx)}
-                            className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"
-                            title="Toggle status"
-                          >
-                            <Pencil className="size-4" />
+                        </td>
+                        <td className="p-4 text-muted-foreground">{u.email}</td>
+                        <td className="p-4"><Badge variant={u.roleV as any}>{u.role}</Badge></td>
+                        <td className="p-4">
+                          <button onClick={() => handleToggleStatus(u._idx)} className="cursor-pointer">
+                            <Badge variant={u.status === "Active" ? "success" : "destructive"}>{u.status}</Badge>
                           </button>
-                          <button
-                            onClick={() => {
-                              deleteUser(u._idx);
-                              toast.success(`${u.name} deleted`);
-                              setSelectedIdxs(new Set());
-                            }}
-                            className="size-8 rounded-md border border-border grid place-items-center text-destructive hover:bg-destructive/10"
-                            title="Delete user"
-                          >
-                            <Trash2 className="size-4" />
-                          </button>
-                        </div>
-                      </td>
+                        </td>
+                        <td className="p-4">{formatDate(u.joined)}</td>
+                        <td className="p-4 text-muted-foreground">{u.last}</td>
+                        <td className="p-4">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleToggleStatus(u._idx)}
+                              className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted"
+                              title="Toggle status"
+                            >
+                              <Pencil className="size-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                deleteUser(u._idx);
+                                toast.success(`${u.name} deleted`);
+                                setSelectedIdxs(new Set());
+                              }}
+                              className="size-8 rounded-md border border-border grid place-items-center text-destructive hover:bg-destructive/10"
+                              title="Delete user"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -270,7 +263,7 @@ function UsersPage() {
                 <div className="p-8 text-center text-muted-foreground">No users found matching your filters.</div>
               )}
             </div>
-             <div className="flex items-center justify-between p-4 text-sm border-t border-border flex-wrap gap-2">
+            <div className="flex items-center justify-between p-4 text-sm border-t border-border flex-wrap gap-2">
               <div className="text-muted-foreground font-medium">
                 Showing {Math.min(filteredUsers.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredUsers.length, currentPage * itemsPerPage)} of {filteredUsers.length} users
               </div>
@@ -279,6 +272,8 @@ function UsersPage() {
                   onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
                   className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                  title="Previous page"
+                  aria-label="Previous page"
                 >
                   <ChevronLeft className="size-4" />
                 </button>
@@ -291,6 +286,8 @@ function UsersPage() {
                         ? "bg-primary text-primary-foreground font-bold"
                         : "border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
                     }`}
+                    title={`Page ${p}`}
+                    aria-label={`Page ${p}`}
                   >
                     {p}
                   </button>
@@ -299,6 +296,8 @@ function UsersPage() {
                   onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages || totalPages === 0}
                   className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                  title="Next page"
+                  aria-label="Next page"
                 >
                   <ChevronRight className="size-4" />
                 </button>
@@ -339,9 +338,9 @@ function UsersPage() {
             <div className="space-y-3 text-sm">
               {[
                 { icon: CheckCircle, color: "bg-success/15 text-success", title: "Rahul Verma logged in", time: "Today, 10:30 AM" },
-                { icon: UserPlus, color: "bg-info/15 text-info", title: "Sneha Sharma added a new episode", time: "Today, 09:20 AM" },
+                { icon: UserCog, color: "bg-info/15 text-info", title: "Sneha Sharma updated settings", time: "Today, 09:20 AM" },
                 { icon: Pencil, color: "bg-warning/20 text-warning-foreground", title: "Amit Kumar updated studio booking", time: "Yesterday, 05:45 PM" },
-                { icon: UserPlus, color: "bg-pink/20 text-pink-foreground", title: "Karan Malhotra invited as viewer", time: "5 Feb 2025, 02:10 PM" },
+                { icon: UserCog, color: "bg-pink/20 text-pink-foreground", title: "Karan Malhotra modified user permissions", time: "5 Feb 2025, 02:10 PM" },
               ].map((a, i) => {
                 const Ic = a.icon;
                 return (
@@ -356,52 +355,159 @@ function UsersPage() {
               })}
             </div>
           </div>
-
-          <div className="bg-gradient-to-br from-primary to-primary/70 text-primary-foreground rounded-2xl p-5">
-            <UserPlus className="size-8 mb-3" />
-            <div className="font-semibold">Add New User</div>
-            <div className="text-xs opacity-90 mt-1">Invite new team members and manage access.</div>
-            <button onClick={() => setShowAddDialog(true)} className="mt-4 w-full bg-white/15 hover:bg-white/25 rounded-lg py-2.5 text-sm font-medium inline-flex items-center justify-center gap-2">
-              <Plus className="size-4" /> Add User <ArrowRight className="size-4" />
-            </button>
-          </div>
         </div>
       </div>
 
       {/* Add User Dialog */}
-      {showAddDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowAddDialog(false)}>
-          <div className="bg-card rounded-2xl border border-border p-6 w-full max-w-md mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold">Add New User</h2>
-              <button onClick={() => setShowAddDialog(false)} className="size-8 rounded-lg border border-border grid place-items-center hover:bg-muted"><X className="size-4" /></button>
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+            <DialogDescription>Invite a new team member to your podcast studio management system.</DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newName.trim() || !newEmail.trim()) {
+                toast.error("Please fill in all required fields");
+                return;
+              }
+              
+              let roleV = "info";
+              if (newRole === "Super Admin") roleV = "primary";
+              else if (newRole === "Viewer") roleV = "warning";
+              
+              addUser({
+                name: newName.trim(),
+                email: newEmail.trim(),
+                role: newRole,
+                roleV,
+                status: "Active",
+                joined: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+                last: "Never active",
+                img: Math.floor(Math.random() * 70)
+              });
+              
+              setShowAddDialog(false);
+              toast.success(`User '${newName}' invited successfully!`);
+            }}
+            className="space-y-4 py-2"
+          >
+            <div className="space-y-2">
+              <label htmlFor="new-user-name" className="text-sm font-medium">Full Name</label>
+              <input
+                id="new-user-name"
+                type="text"
+                required
+                className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g. John Doe"
+              />
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-muted-foreground">Full Name</label>
-                <input className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Enter full name" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Email Address</label>
-                <input className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Enter email" type="email" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Role</label>
-                <select className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
-                  <option>Viewer</option>
-                  <option>Editor</option>
-                  <option>Admin</option>
-                  <option>Super Admin</option>
-                </select>
-              </div>
+            <div className="space-y-2">
+              <label htmlFor="new-user-email" className="text-sm font-medium">Email Address</label>
+              <input
+                id="new-user-email"
+                type="email"
+                required
+                className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="john@example.com"
+              />
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowAddDialog(false)} className="flex-1 h-10 rounded-lg border border-border text-sm font-medium hover:bg-muted">Cancel</button>
-              <button onClick={handleAddUser} className="flex-1 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Add User</button>
+            <div className="space-y-2">
+              <label htmlFor="new-user-role" className="text-sm font-medium">Role</label>
+              <select
+                id="new-user-role"
+                className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value)}
+              >
+                <option value="Super Admin">Super Admin</option>
+                <option value="Admin">Admin</option>
+                <option value="Editor">Editor</option>
+                <option value="Viewer">Viewer</option>
+              </select>
             </div>
+            <DialogFooter className="pt-4">
+              <button
+                type="button"
+                className="px-4 py-2 text-sm border border-border rounded-md hover:bg-accent cursor-pointer"
+                onClick={() => setShowAddDialog(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 cursor-pointer"
+              >
+                Add User
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Users Dialog */}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Export Users</DialogTitle>
+            <DialogDescription>Select your preferred format for the exported users list.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <button
+              onClick={() => {
+                setExportOpen(false);
+                toast.success("Preparing PDF print layout...");
+                setTimeout(() => {
+                  window.print();
+                }, 500);
+              }}
+              className="flex flex-col items-center justify-center p-4 border border-border rounded-xl hover:border-primary/40 hover:bg-muted/50 cursor-pointer transition-all bg-transparent"
+            >
+              <FileText className="size-8 text-primary mb-2" />
+              <span className="font-semibold text-sm">Print / PDF</span>
+              <span className="text-[10px] text-muted-foreground mt-1 text-center">Print layout optimized for paper or PDF</span>
+            </button>
+            <button
+              onClick={() => {
+                setExportOpen(false);
+                let csvContent = "data:text/csv;charset=utf-8," 
+                  + "Name,Email,Role,Status,Joined On,Last Active\n";
+                
+                filteredUsers.forEach((u) => {
+                  const row = [
+                    `"${u.name.replace(/"/g, '""')}"`,
+                    u.email,
+                    u.role,
+                    u.status,
+                    u.joined,
+                    `"${u.last.replace(/"/g, '""')}"`
+                  ].join(",");
+                  csvContent += row + "\n";
+                });
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `users_export_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast.success("Users CSV downloaded successfully!");
+              }}
+              className="flex flex-col items-center justify-center p-4 border border-border rounded-xl hover:border-primary/40 hover:bg-muted/50 cursor-pointer transition-all bg-transparent"
+            >
+              <Download className="size-8 text-success mb-2" />
+              <span className="font-semibold text-sm">Spreadsheet (CSV)</span>
+              <span className="text-[10px] text-muted-foreground mt-1 text-center">Export raw users for Excel / Google Sheets</span>
+            </button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
