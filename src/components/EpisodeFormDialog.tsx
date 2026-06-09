@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { useState, useEffect } from "react";
 import { useAppContext, type Episode } from "@/contexts/AppContext";
 import { toast } from "sonner";
+import { toYYYYMMDD, fromYYYYMMDD } from "@/lib/utils";
 
 // Standard 1-hour time slots
 const START_SLOTS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`);
@@ -16,15 +17,16 @@ export function EpisodeFormDialog({
   onOpenChange: (open: boolean) => void;
   episodeToEdit?: Episode;
 }) {
-  const { addEpisode, updateEpisode } = useAppContext();
+  const { addEpisode, updateEpisode, settings } = useAppContext();
 
   const [title, setTitle] = useState("");
-  const [show, setShow] = useState("Podcast Studio");
+  const [show, setShow] = useState(settings.studio.name);
   const [guest, setGuest] = useState("");
   const [date, setDate] = useState("");
   const [startSlot, setStartSlot] = useState("09:00");
   const [endSlot, setEndSlot] = useState("10:00");
   const [status, setStatus] = useState<Episode["status"]>("Draft");
+  const [publishedDate, setPublishedDate] = useState("");
 
   // Backend length calculator to automatically compute duration
   const startHour = parseInt(startSlot.split(":")[0], 10);
@@ -37,7 +39,8 @@ export function EpisodeFormDialog({
       setTitle(episodeToEdit.title);
       setShow(episodeToEdit.show);
       setGuest(episodeToEdit.guest);
-      setDate(episodeToEdit.date);
+      setDate(toYYYYMMDD(episodeToEdit.date));
+      setPublishedDate(toYYYYMMDD(episodeToEdit.publishedDate || ""));
       setStatus(episodeToEdit.status);
       
       // Parse compiled time string
@@ -51,14 +54,22 @@ export function EpisodeFormDialog({
       }
     } else if (open) {
       setTitle("");
-      setShow("Podcast Studio");
+      setShow(settings.studio.name);
       setGuest("");
       setDate("");
       setStartSlot("09:00");
       setEndSlot("10:00");
-      setStatus("Draft");
+      const defaultStatus = (["Published", "Scheduled", "Draft", "Archived"].includes(settings.booking.defaultStatus) ? settings.booking.defaultStatus : "Draft") as Episode["status"];
+      setStatus(defaultStatus);
+      setPublishedDate(defaultStatus === "Published" ? new Date().toISOString().slice(0, 10) : "");
     }
-  }, [open, episodeToEdit]);
+  }, [open, episodeToEdit, settings.booking.defaultStatus, settings.studio.name]);
+
+  useEffect(() => {
+    if (status === "Published" && !publishedDate) {
+      setPublishedDate(new Date().toISOString().slice(0, 10));
+    }
+  }, [status, publishedDate]);
 
   const handleStartSlotChange = (val: string) => {
     setStartSlot(val);
@@ -75,19 +86,30 @@ export function EpisodeFormDialog({
       toast.error("Please provide an episode title.");
       return;
     }
+    const effectiveStatus = settings.booking.autoPublish && status === "Scheduled" ? "Published" : status;
+    const effectivePublishedDate = effectiveStatus === "Published" && !publishedDate
+      ? new Date().toISOString().slice(0, 10)
+      : publishedDate;
+
+    if (effectiveStatus === "Published" && !effectivePublishedDate) {
+      toast.error("Published episodes need a published date.");
+      return;
+    }
 
     const compiledTimeStr = `${startSlot} to ${endSlot}`;
 
+    const savedDate = date ? fromYYYYMMDD(date) : "—";
+
     if (episodeToEdit) {
       updateEpisode(episodeToEdit.id, {
-        title, show, guest, dur: calculatedDur, date, time: compiledTimeStr, status
+        title, show, guest, dur: calculatedDur, date: savedDate, publishedDate: effectivePublishedDate ? fromYYYYMMDD(effectivePublishedDate) : "", time: compiledTimeStr, status: effectiveStatus
       });
       toast.success("Episode updated successfully!");
     } else {
       addEpisode({
-        title, show, guest: guest || "Admin", dur: calculatedDur, date: date || "—", time: compiledTimeStr, status
+        title, show, guest: guest || "Admin", dur: calculatedDur, date: savedDate, publishedDate: effectivePublishedDate ? fromYYYYMMDD(effectivePublishedDate) : "", time: compiledTimeStr, status: effectiveStatus
       });
-      toast.success("New episode created successfully!");
+      toast.success(effectiveStatus !== status ? "Episode auto-published from settings." : "New episode created successfully!");
     }
     onOpenChange(false);
   };
@@ -122,7 +144,7 @@ export function EpisodeFormDialog({
                 onChange={(e) => setShow(e.target.value)}
                 title="Select Show / Series"
               >
-                <option>Podcast Studio</option>
+                <option>{settings.studio.name}</option>
                 <option>Tech Talk</option>
                 <option>Marketing Minds</option>
                 <option>Founders Hub</option>
@@ -146,8 +168,8 @@ export function EpisodeFormDialog({
               <label className="text-sm font-medium" htmlFor="episode-date">Date</label>
               <input
                 id="episode-date"
+                type="date"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                placeholder="15 May 2025"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 title="Date"
@@ -198,6 +220,9 @@ export function EpisodeFormDialog({
               </select>
             </div>
           </div>
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Studio features: {settings.booking.videoRecording ? "video recording on" : "audio only"}, {settings.booking.liveStreaming ? "live streaming on" : "live streaming off"}, {settings.booking.guestUploads ? "guest uploads on" : "guest uploads off"}.
+          </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="episode-status">Status</label>
@@ -214,6 +239,24 @@ export function EpisodeFormDialog({
               <option>Archived</option>
             </select>
           </div>
+          {settings.booking.autoPublish && status === "Scheduled" && (
+            <div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs text-success-foreground">
+              Auto Publish is enabled, so this scheduled episode will be saved as Published.
+            </div>
+          )}
+          {status === "Published" && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="episode-published-date">Published Date</label>
+              <input
+                id="episode-published-date"
+                type="date"
+                className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={publishedDate}
+                onChange={(e) => setPublishedDate(e.target.value)}
+                title="Published Date"
+              />
+            </div>
+          )}
           <DialogFooter className="pt-4">
             <button
               type="button"

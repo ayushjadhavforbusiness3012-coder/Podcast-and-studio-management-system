@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { ChevronLeft, ChevronRight, Plus, Search, RotateCcw } from "lucide-react";
-import { useAppContext } from "@/contexts/AppContext";
+import { Badge } from "@/components/DashboardLayout";
+import { ChevronLeft, ChevronRight, Plus, Search, RotateCcw, Eye, Pencil } from "lucide-react";
+import { useAppContext, type Booking } from "@/contexts/AppContext";
 import { BookingFormDialog } from "@/components/BookingFormDialog";
+import { BookingDetailsDialog } from "@/components/BookingDetailsDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 
@@ -16,6 +19,11 @@ function CalendarPage() {
   
   const [formOpen, setFormOpen] = useState(false);
   const [selectedDateForModal, setSelectedDateForModal] = useState("");
+  const [selectedBookingForForm, setSelectedBookingForForm] = useState<Booking | undefined>(undefined);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
+  const [dayDetailsOpen, setDayDetailsOpen] = useState(false);
+  const [selectedDayBookings, setSelectedDayBookings] = useState<Booking[]>([]);
 
   // Real-time system machine date anchor (June 2026 based on metadata system time)
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -123,7 +131,8 @@ function CalendarPage() {
   const handleCellClick = (cellDate: Date) => {
     const formatted = cellDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
     setSelectedDateForModal(formatted);
-    setFormOpen(true);
+    setSelectedDayBookings(getFilteredBookingsForCell(cellDate));
+    setDayDetailsOpen(true);
   };
 
   // Sidebar Filter execution logic
@@ -250,13 +259,16 @@ function CalendarPage() {
                     )}
                   </div>
                   <div className="space-y-1 overflow-y-auto max-h-[90px] flex-1 pr-0.5">
-                    {dayBookings.map((b) => (
+                    {dayBookings.slice(0, 1).map((b) => (
                       <div key={b.id} className={`rounded-md p-1.5 text-[10px] ${getVariantColor(b.sv)} leading-tight`}>
                         <div className="font-bold truncate">{b.time.includes("to") ? b.time : b.time.split(" - ")[0]}</div>
                         <div className="font-semibold truncate text-foreground/90">{b.guest}</div>
                         <div className="opacity-75 truncate">{b.studio}</div>
                       </div>
                     ))}
+                    {dayBookings.length > 1 && (
+                      <div className="text-[10px] font-semibold text-primary px-1">+{dayBookings.length - 1} more</div>
+                    )}
                   </div>
                 </div>
               );
@@ -276,6 +288,7 @@ function CalendarPage() {
           <button 
             onClick={() => {
               setSelectedDateForModal("");
+              setSelectedBookingForForm(undefined);
               setFormOpen(true);
             }} 
             className="w-full h-11 rounded-lg bg-primary text-primary-foreground font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
@@ -399,9 +412,77 @@ function CalendarPage() {
       
       <BookingFormDialog 
         open={formOpen} 
-        onOpenChange={setFormOpen} 
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setSelectedBookingForForm(undefined);
+        }}
         defaultDate={selectedDateForModal}
+        bookingToEdit={selectedBookingForForm}
       />
+      <BookingDetailsDialog open={detailsOpen} onOpenChange={setDetailsOpen} booking={selectedBookingForDetails} />
+      <Dialog open={dayDetailsOpen} onOpenChange={setDayDetailsOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>{selectedDateForModal || "Day Details"}</DialogTitle>
+            <DialogDescription>All bookings scheduled for this day.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+            {selectedDayBookings.map((booking) => (
+              <div key={booking.id} className="rounded-lg border border-border p-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm text-foreground">{booking.guest}</div>
+                  <div className="text-xs text-muted-foreground">{formatTime(booking.time)} · {booking.studio}</div>
+                  <div className="text-xs text-muted-foreground">{booking.pkg}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge variant={booking.sv}>{booking.status}</Badge>
+                  <Badge variant={booking.paymentStatus === "Paid" ? "success" : booking.paymentStatus === "Partially Paid" ? "info" : booking.paymentStatus === "Refunded" ? "destructive" : "warning"}>{booking.paymentStatus}</Badge>
+                  <div className="flex gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedBookingForDetails(booking);
+                        setDetailsOpen(true);
+                      }}
+                      className="size-7 rounded-md border border-border grid place-items-center text-info hover:bg-info/10"
+                      title="View booking"
+                      aria-label="View booking"
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedBookingForForm(booking);
+                        setDayDetailsOpen(false);
+                        setFormOpen(true);
+                      }}
+                      className="size-7 rounded-md border border-border grid place-items-center text-warning-foreground hover:bg-warning/10"
+                      title="Edit booking"
+                      aria-label="Edit booking"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {selectedDayBookings.length === 0 && (
+              <div className="py-8 text-center text-sm text-muted-foreground">No bookings on this day.</div>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setDayDetailsOpen(false);
+              setSelectedBookingForForm(undefined);
+              setFormOpen(true);
+            }}
+            className="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90"
+          >
+            <Plus className="size-4" /> New Booking
+          </button>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

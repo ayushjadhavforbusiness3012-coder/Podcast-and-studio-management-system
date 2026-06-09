@@ -2,6 +2,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { useState, useEffect } from "react";
 import { useAppContext, type Invoice } from "@/contexts/AppContext";
 import { toast } from "sonner";
+import { clampPaidAmount, currencySymbol, formatCurrency, parseCurrencyValue } from "@/lib/money";
+import { toYYYYMMDD, fromYYYYMMDD } from "@/lib/utils";
 
 export function InvoiceFormDialog({
   open,
@@ -12,7 +14,8 @@ export function InvoiceFormDialog({
   onOpenChange: (open: boolean) => void;
   invoiceToEdit?: Invoice;
 }) {
-  const { addInvoice, updateInvoice } = useAppContext();
+  const { addInvoice, updateInvoice, settings } = useAppContext();
+  const moneySymbol = currencySymbol(settings.payment.currency);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -20,29 +23,46 @@ export function InvoiceFormDialog({
   const [date, setDate] = useState("");
   const [due, setDue] = useState("");
   const [amount, setAmount] = useState("");
+  const [paidAmount, setPaidAmount] = useState(() => formatCurrency(0));
   const [status, setStatus] = useState<Invoice["status"]>("Pending");
+  const subtotal = parseCurrencyValue(amount);
+  const taxAmount = Math.round(subtotal * (Number(settings.payment.taxRate) || 0) / 100);
+  const totalAmount = subtotal + taxAmount;
+  const finalAmount = formatCurrency(totalAmount, moneySymbol);
 
   useEffect(() => {
     if (open && invoiceToEdit) {
       setName(invoiceToEdit.name);
       setEmail(invoiceToEdit.email);
       setShow(invoiceToEdit.show);
-      setDate(invoiceToEdit.date);
-      setDue(invoiceToEdit.due);
+      setDate(toYYYYMMDD(invoiceToEdit.date));
+      setDue(toYYYYMMDD(invoiceToEdit.due));
       setAmount(invoiceToEdit.amount);
+      setPaidAmount(invoiceToEdit.paidAmount ?? formatCurrency(0, moneySymbol));
       setStatus(invoiceToEdit.status);
     } else if (open) {
       setName("");
       setEmail("");
       setShow("");
-      setDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+      setDate(toYYYYMMDD(new Date().toISOString().split('T')[0]));
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 7);
-      setDue(dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+      setDue(toYYYYMMDD(dueDate.toISOString().split('T')[0]));
       setAmount("");
+      setPaidAmount(formatCurrency(0, moneySymbol));
       setStatus("Pending");
     }
-  }, [open, invoiceToEdit]);
+  }, [open, invoiceToEdit, moneySymbol]);
+
+  useEffect(() => {
+    if (status === "Paid") {
+      setPaidAmount(formatCurrency(totalAmount, moneySymbol));
+    } else if (status === "Pending" || status === "Overdue" || status === "Refunded") {
+      setPaidAmount(formatCurrency(0, moneySymbol));
+    } else {
+      setPaidAmount(formatCurrency(clampPaidAmount(parseCurrencyValue(paidAmount), totalAmount), moneySymbol));
+    }
+  }, [status, amount, totalAmount, moneySymbol]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,15 +70,24 @@ export function InvoiceFormDialog({
       toast.error("Please fill in required fields.");
       return;
     }
+    const normalizedPaidAmount = formatCurrency(
+      status === "Paid"
+        ? totalAmount
+        : status === "Partially Paid"
+          ? clampPaidAmount(parseCurrencyValue(paidAmount), totalAmount)
+          : 0,
+      moneySymbol
+    );
 
     if (invoiceToEdit) {
       updateInvoice(invoiceToEdit.id, {
         name,
         email,
         show,
-        date,
-        due,
-        amount,
+        date: fromYYYYMMDD(date),
+        due: fromYYYYMMDD(due),
+        amount: finalAmount,
+        paidAmount: normalizedPaidAmount,
         status,
       });
       toast.success("Invoice updated successfully!");
@@ -67,9 +96,10 @@ export function InvoiceFormDialog({
         name,
         email,
         show,
-        date,
-        due,
-        amount,
+        date: fromYYYYMMDD(date),
+        due: fromYYYYMMDD(due),
+        amount: finalAmount,
+        paidAmount: normalizedPaidAmount,
         status,
       });
       toast.success("New invoice created successfully!");
@@ -125,8 +155,8 @@ export function InvoiceFormDialog({
               <label className="text-sm font-medium" htmlFor="invoice-date">Invoice Date</label>
               <input
                 id="invoice-date"
+                type="date"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
-                placeholder="DD MMM YYYY"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 title="Invoice Date"
@@ -136,8 +166,8 @@ export function InvoiceFormDialog({
               <label className="text-sm font-medium" htmlFor="invoice-due">Due Date</label>
               <input
                 id="invoice-due"
+                type="date"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
-                placeholder="DD MMM YYYY"
                 value={due}
                 onChange={(e) => setDue(e.target.value)}
                 title="Due Date"
@@ -146,11 +176,11 @@ export function InvoiceFormDialog({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="invoice-amount">Amount *</label>
+              <label className="text-sm font-medium" htmlFor="invoice-amount">Amount Before Tax *</label>
               <input
                 id="invoice-amount"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
-                placeholder="₹5,000"
+                placeholder={`${moneySymbol}5,000`}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 title="Amount"
@@ -167,10 +197,34 @@ export function InvoiceFormDialog({
               >
                 <option value="Paid">Paid</option>
                 <option value="Pending">Pending</option>
+                <option value="Partially Paid">Partially Paid</option>
                 <option value="Overdue">Overdue</option>
+                <option value="Refunded">Refunded</option>
               </select>
             </div>
           </div>
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Tax {settings.payment.taxRate}%: {formatCurrency(taxAmount, moneySymbol)} · Invoice total: <span className="font-semibold text-foreground">{finalAmount}</span>
+          </div>
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Enabled payment methods: {[
+              settings.payment.stripeEnabled ? "Stripe" : "",
+              settings.payment.paypalEnabled ? "PayPal" : "",
+            ].filter(Boolean).join(", ") || "offline/manual only"}.
+          </div>
+          {status === "Partially Paid" && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="invoice-paid-amount">Paid Amount</label>
+              <input
+                id="invoice-paid-amount"
+                className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(e.target.value)}
+                onBlur={() => setPaidAmount(formatCurrency(clampPaidAmount(parseCurrencyValue(paidAmount), totalAmount), moneySymbol))}
+                title="Paid Amount"
+              />
+            </div>
+          )}
           <DialogFooter className="pt-4">
             <button
               type="button"

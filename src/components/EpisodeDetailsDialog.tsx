@@ -50,8 +50,12 @@ export function EpisodeDetailsDialog({
               </div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-1">Date</div>
+              <div className="text-sm text-muted-foreground mb-1">Recording Date</div>
               <div className="font-medium text-sm flex items-center gap-1"><CalendarDays className="size-3" /> {episode.date}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground mb-1">Published Date</div>
+              <div className="font-medium text-sm">{episode.publishedDate || "—"}</div>
             </div>
           </div>
         </div>

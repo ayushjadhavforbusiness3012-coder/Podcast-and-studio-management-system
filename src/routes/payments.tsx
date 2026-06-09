@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useAppContext, type Invoice } from "@/contexts/AppContext";
+import { useAppContext, type Booking, type Invoice } from "@/contexts/AppContext";
+import { currencySymbol, formatCurrency, invoiceRevenue, bookingRevenue, parseCurrencyValue, totalRevenue as calculateTotalRevenue } from "@/lib/money";
 import { DashboardLayout, StatCard, Badge } from "@/components/DashboardLayout";
 import { Wallet, FileText, Clock, XCircle, Plus, Search, Filter, RotateCcw, Eye, Download, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, Pencil, Trash2 } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -19,13 +20,21 @@ export const Route = createFileRoute("/payments")({
   component: Payments,
 });
 
-const statusVariant: Record<string, any> = { Paid: "success", Pending: "warning", Overdue: "destructive" };
+const statusVariant: Record<string, any> = { Paid: "success", Pending: "warning", "Partially Paid": "info", Overdue: "destructive", Refunded: "default", Unpaid: "warning" };
 
-function Donut() {
+type PaymentLedgerRow =
+  | { source: "Booking"; id: string; name: string; email: string; show: string; date: string; due: string; amount: string; paidAmount: string; status: Booking["paymentStatus"]; img: number; raw: Booking }
+  | { source: "Invoice"; id: string; name: string; email: string; show: string; date: string; due: string; amount: string; paidAmount: string; status: Invoice["status"]; img: number; raw: Invoice };
+
+function percentOf(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+function Donut({ paidPercent, pendingPercent, overduePercent }: { paidPercent: number; pendingPercent: number; overduePercent: number }) {
   const segments = [
-    { color: "#22c55e", val: 76 },
-    { color: "#eab308", val: 17 },
-    { color: "#ef4444", val: 7 },
+    { color: "#22c55e", val: paidPercent },
+    { color: "#eab308", val: pendingPercent },
+    { color: "#ef4444", val: overduePercent },
   ];
   let offset = 0;
   const r = 60, c = 2 * Math.PI * r;
@@ -49,7 +58,8 @@ const months = [
 ];
 
 function Payments() {
-  const { invoices, deleteInvoice, formatDate } = useAppContext();
+  const { bookings, invoices, settings, deleteInvoice, formatDate } = useAppContext();
+  const moneySymbol = currencySymbol(settings.payment.currency);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [overviewMonth, setOverviewMonth] = useState("May");
@@ -82,8 +92,39 @@ function Payments() {
     setFormOpen(true);
   };
 
+  const ledgerRows = useMemo<PaymentLedgerRow[]>(() => [
+    ...bookings.map((booking) => ({
+      source: "Booking" as const,
+      id: booking.id,
+      name: booking.guest,
+      email: "",
+      show: `${booking.pkg} · ${booking.studio}`,
+      date: booking.date,
+      due: booking.date,
+      amount: booking.amt,
+      paidAmount: booking.paidAmount,
+      status: booking.paymentStatus,
+      img: booking.guest.length + 10,
+      raw: booking,
+    })),
+    ...invoices.map((invoice) => ({
+      source: "Invoice" as const,
+      id: invoice.id,
+      name: invoice.name,
+      email: invoice.email,
+      show: invoice.show,
+      date: invoice.date,
+      due: invoice.due,
+      amount: invoice.amount,
+      paidAmount: invoice.paidAmount,
+      status: invoice.status,
+      img: invoice.img,
+      raw: invoice,
+    })),
+  ], [bookings, invoices]);
+
   const filteredInvoices = useMemo(() => {
-    return invoices.filter((i) => {
+    return ledgerRows.filter((i) => {
       const q = searchQuery.toLowerCase();
       const matchesSearch = !q || i.name.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || i.show.toLowerCase().includes(q);
       const matchesStatus = statusFilter === "All Status" || i.status === statusFilter;
@@ -102,13 +143,29 @@ function Payments() {
       }
       return matchesSearch && matchesStatus && matchesDate;
     });
-  }, [invoices, searchQuery, statusFilter, targetDate]);
+  }, [ledgerRows, searchQuery, statusFilter, targetDate]);
 
   const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
   const paginatedInvoices = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredInvoices.slice(start, start + itemsPerPage);
   }, [filteredInvoices, currentPage, itemsPerPage]);
+
+  const monthIndex = months.indexOf(overviewMonth);
+  const overviewInvoices = useMemo(
+    () => ledgerRows.filter((row) => new Date(row.date).getMonth() === monthIndex),
+    [ledgerRows, monthIndex]
+  );
+  const paidAmount = calculateTotalRevenue(bookings, invoices);
+  const pendingAmount = ledgerRows.filter((row) => row.status === "Pending" || row.status === "Unpaid").reduce((sum, row) => sum + parseCurrencyValue(row.amount), 0);
+  const overdueAmount = invoices.filter((invoice) => invoice.status === "Overdue").reduce((sum, invoice) => sum + parseCurrencyValue(invoice.amount), 0);
+  const overviewPaidAmount = overviewInvoices.reduce((sum, row) => sum + (row.source === "Booking" ? bookingRevenue(row.raw) : invoiceRevenue(row.raw)), 0);
+  const overviewPendingAmount = overviewInvoices.filter((row) => row.status === "Pending" || row.status === "Unpaid").reduce((sum, row) => sum + parseCurrencyValue(row.amount), 0);
+  const overviewOverdueAmount = overviewInvoices.filter((row) => row.status === "Overdue").reduce((sum, row) => sum + parseCurrencyValue(row.amount), 0);
+  const overviewTotalAmount = overviewPaidAmount + overviewPendingAmount + overviewOverdueAmount;
+  const recentTransactions = ledgerRows
+    .filter((row) => parseCurrencyValue(row.paidAmount) > 0 || row.status === "Refunded")
+    .slice(0, 4);
 
   const handleApplyFilters = () => {
     setStatusFilter(tempStatus);
@@ -135,8 +192,8 @@ function Payments() {
         <>
           <div className="relative hidden md:block">
             <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              placeholder="Search invoices..." 
+            <input
+              placeholder="Search payments..."
               className="h-10 w-72 rounded-lg border border-border bg-card pl-9 pr-3 text-sm focus:outline-none"
               value={searchQuery}
               onChange={(e) => {
@@ -161,17 +218,17 @@ function Payments() {
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard icon={Wallet} label="Total Revenue" value="₹1,45,000" trend="↑ 24% from last month" tone="primary" />
-        <StatCard icon={FileText} label="Paid Amount" value="₹1,10,000" trend="↑ 20% from last month" tone="success" />
-        <StatCard icon={Clock} label="Pending Amount" value="₹25,000" trend="↑ 15% from last month" tone="warning" />
-        <StatCard icon={XCircle} label="Overdue Amount" value="₹10,000" trend="↓ 8% from last month" trendType="down" tone="destructive" />
+        <StatCard icon={Wallet} label="Total Revenue" value={formatCurrency(paidAmount, moneySymbol)} trend="Paid bookings and invoices" tone="primary" />
+        <StatCard icon={FileText} label="Paid Amount" value={formatCurrency(paidAmount, moneySymbol)} trend="Collected" tone="success" />
+        <StatCard icon={Clock} label="Pending Amount" value={formatCurrency(pendingAmount, moneySymbol)} trend="Awaiting payment" tone="warning" />
+        <StatCard icon={XCircle} label="Overdue Amount" value={formatCurrency(overdueAmount, moneySymbol)} trend="Needs attention" trendType="down" tone="destructive" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-6">
         <div className="space-y-6">
           <div className="bg-card border border-border rounded-2xl">
             <div className="flex border-b border-border px-5">
-              <button className="px-4 py-3 border-b-2 border-primary text-primary font-medium text-sm">Invoices</button>
+              <button className="px-4 py-3 border-b-2 border-primary text-primary font-medium text-sm">Payments Ledger</button>
               <button className="px-4 py-3 text-muted-foreground text-sm hover:text-foreground">Transactions</button>
             </div>
             {/* Consolidated 3-column filter row */}
@@ -190,7 +247,10 @@ function Payments() {
                   <option value="All Status">All Status</option>
                   <option value="Paid">Paid</option>
                   <option value="Pending">Pending</option>
+                  <option value="Partially Paid">Partially Paid</option>
                   <option value="Overdue">Overdue</option>
+                  <option value="Refunded">Refunded</option>
+                  <option value="Unpaid">Unpaid</option>
                 </select>
               </div>
               <div>
@@ -222,7 +282,7 @@ function Payments() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-muted-foreground">
                   <tr>
-                    <th className="p-4 text-left font-semibold">Invoice ID</th>
+                    <th className="p-4 text-left font-semibold">Payment ID</th>
                     <th className="p-4 text-left font-semibold">Guest / Client</th>
                     <th className="p-4 text-left font-semibold">Booking / Episode</th>
                     <th className="p-4 text-left font-semibold">Invoice Date</th>
@@ -236,13 +296,16 @@ function Payments() {
                 {paginatedInvoices.map((i) => {
                   let statusBorderClass = "border-l-4 border-l-transparent";
                   if (i.status === "Paid") statusBorderClass = "border-l-4 border-l-success";
-                  else if (i.status === "Pending") statusBorderClass = "border-l-4 border-l-warning";
+                  else if (i.status === "Pending" || i.status === "Unpaid") statusBorderClass = "border-l-4 border-l-warning";
+                  else if (i.status === "Partially Paid") statusBorderClass = "border-l-4 border-l-info";
                   else if (i.status === "Overdue") statusBorderClass = "border-l-4 border-l-destructive";
+                  else if (i.status === "Refunded") statusBorderClass = "border-l-4 border-l-muted-foreground";
 
                   return (
                     <tr key={i.id} className="border-t border-border hover:bg-muted/30 transition-colors">
                       <td className={`p-4 font-medium ${statusBorderClass}`}>
                         <span className="font-medium text-primary ml-1">{i.id}</span>
+                        <div className="text-[10px] text-muted-foreground ml-1">{i.source}</div>
                       </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
@@ -259,7 +322,10 @@ function Payments() {
                     </td>
                     <td className="p-4">{formatDate(i.date)}</td>
                     <td className="p-4">{formatDate(i.due)}</td>
-                    <td className="p-4 font-semibold text-foreground">{i.amount}</td>
+                    <td className="p-4 font-semibold text-foreground">
+                      {i.amount}
+                      <div className="text-[10px] text-muted-foreground">Paid {i.paidAmount}</div>
+                    </td>
                     <td className="p-4"><Badge variant={statusVariant[i.status]}>{i.status}</Badge></td>
                     <td className="p-4">
                       <div className="flex gap-1">
@@ -268,14 +334,24 @@ function Payments() {
                             <button className="size-8 rounded-md border border-border grid place-items-center hover:bg-accent cursor-pointer" title="Action Menu" aria-label="Action Menu"><MoreVertical className="size-4" /></button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleView(i)}><Eye className="mr-2 size-4" /> View Details</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEdit(i)}><Pencil className="mr-2 size-4" /> Edit Invoice</DropdownMenuItem>
+                            {i.source === "Invoice" ? (
+                              <>
+                                <DropdownMenuItem onClick={() => handleView(i.raw)}><Eye className="mr-2 size-4" /> View Details</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEdit(i.raw)}><Pencil className="mr-2 size-4" /> Edit Invoice</DropdownMenuItem>
+                              </>
+                            ) : (
+                              <DropdownMenuItem onClick={() => toast.info("Edit booking payments from the Bookings page.")}><Eye className="mr-2 size-4" /> Booking Payment</DropdownMenuItem>
+                            )}
                             <DropdownMenuItem onClick={() => toast.success("Invoice downloaded as PDF")}><Download className="mr-2 size-4" /> Download</DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-destructive focus:bg-destructive/10 focus:text-destructive"
                               onClick={() => {
-                                deleteInvoice(i.id);
-                                toast.success("Invoice deleted");
+                                if (i.source === "Invoice") {
+                                  deleteInvoice(i.id);
+                                  toast.success("Invoice deleted");
+                                } else {
+                                  toast.info("Delete booking payments from the Bookings page.");
+                                }
                               }}
                             >
                               <Trash2 className="mr-2 size-4" /> Delete
@@ -291,14 +367,14 @@ function Payments() {
               </table>
               {filteredInvoices.length === 0 && (
                 <div className="p-8 text-center text-muted-foreground">
-                  No invoices found matching "{searchQuery}".
+                  No payments found matching "{searchQuery}".
                 </div>
               )}
             </div>
             {/* Repaired dynamic numerical footer navigation */}
             <div className="flex items-center justify-between p-4 text-sm border-t border-border flex-wrap gap-2">
               <div className="text-muted-foreground font-medium">
-                Showing {Math.min(filteredInvoices.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredInvoices.length, currentPage * itemsPerPage)} of {filteredInvoices.length} invoices
+                Showing {Math.min(filteredInvoices.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredInvoices.length, currentPage * itemsPerPage)} of {filteredInvoices.length} payments
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="size-8 rounded-md border border-border grid place-items-center hover:bg-muted disabled:opacity-50 disabled:pointer-events-none cursor-pointer" title="First page" aria-label="First page"><ChevronsLeft className="size-4" /></button>
@@ -344,11 +420,15 @@ function Payments() {
             </div>
             <div className="flex flex-col items-center justify-center pt-2">
               <div className="relative shrink-0 mb-6">
-                <Donut />
+                <Donut
+                  paidPercent={percentOf(overviewPaidAmount, overviewTotalAmount)}
+                  pendingPercent={percentOf(overviewPendingAmount, overviewTotalAmount)}
+                  overduePercent={percentOf(overviewOverdueAmount, overviewTotalAmount)}
+                />
                 <div className="absolute inset-0 grid place-items-center text-center">
                   <div>
-                    <div className="text-lg font-bold text-foreground">₹1,45,000</div>
-                    <div className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Total Revenue</div>
+                    <div className="text-lg font-bold text-foreground">{formatCurrency(overviewTotalAmount, moneySymbol)}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Invoiced</div>
                   </div>
                 </div>
               </div>
@@ -359,7 +439,7 @@ function Payments() {
                     <span className="font-medium text-muted-foreground">Paid</span>
                   </div>
                   <span className="font-semibold text-foreground">
-                    ₹1,10,000<span className="text-xs font-normal text-muted-foreground ml-1.5">(76%)</span>
+                    {formatCurrency(overviewPaidAmount, moneySymbol)}<span className="text-xs font-normal text-muted-foreground ml-1.5">({percentOf(overviewPaidAmount, overviewTotalAmount)}%)</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -368,7 +448,7 @@ function Payments() {
                     <span className="font-medium text-muted-foreground">Pending</span>
                   </div>
                   <span className="font-semibold text-foreground">
-                    ₹25,000<span className="text-xs font-normal text-muted-foreground ml-1.5">(17%)</span>
+                    {formatCurrency(overviewPendingAmount, moneySymbol)}<span className="text-xs font-normal text-muted-foreground ml-1.5">({percentOf(overviewPendingAmount, overviewTotalAmount)}%)</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -377,7 +457,7 @@ function Payments() {
                     <span className="font-medium text-muted-foreground">Overdue</span>
                   </div>
                   <span className="font-semibold text-foreground">
-                    ₹10,000<span className="text-xs font-normal text-muted-foreground ml-1.5">(7%)</span>
+                    {formatCurrency(overviewOverdueAmount, moneySymbol)}<span className="text-xs font-normal text-muted-foreground ml-1.5">({percentOf(overviewOverdueAmount, overviewTotalAmount)}%)</span>
                   </span>
                 </div>
               </div>
@@ -389,28 +469,35 @@ function Payments() {
               <h3 className="font-semibold">Recent Transactions</h3>
               <a className="text-xs text-primary hover:underline cursor-pointer">View All</a>
             </div>
-            <div className="space-y-3 text-sm">
-              {[
-                { icon: ArrowUp, color: "text-success", title: "Payment received from Rahul Verma", id: "INV-1008", amt: "₹3,000", date: "15 May 2025" },
-                { icon: ArrowUp, color: "text-success", title: "Payment received from Amit Kumar", id: "INV-1006", amt: "₹3,000", date: "14 May 2025" },
-                { icon: Clock, color: "text-warning", title: "Payment pending from Sneha Sharma", id: "INV-1007", amt: "₹2,500", date: "15 May 2025" },
-                { icon: ArrowDown, color: "text-destructive", title: "Payment overdue from Neha Singh", id: "INV-1004", amt: "₹2,500", date: "10 May 2025" },
-              ].map((t, i) => {
-                const Ic = t.icon;
+            <div className="space-y-3 text-sm">              {recentTransactions.map((t) => {
+                const Ic = t.status === "Paid" || t.status === "Partially Paid" ? ArrowUp : t.status === "Pending" || t.status === "Unpaid" ? Clock : ArrowDown;
+                const color = t.status === "Paid" || t.status === "Partially Paid" ? "text-success" : t.status === "Pending" || t.status === "Unpaid" ? "text-warning" : "text-destructive";
+                const title = t.status === "Paid"
+                  ? `Payment received from ${t.name}`
+                  : t.status === "Partially Paid"
+                    ? `Partial payment received from ${t.name}`
+                    : t.status === "Refunded"
+                      ? `Payment refunded for ${t.name}`
+                      : t.status === "Overdue"
+                        ? `Payment overdue from ${t.name}`
+                        : `Payment pending from ${t.name}`;
                 return (
-                  <div key={i} className="flex items-start gap-3 pb-3 border-b border-border last:border-0">
-                    <div className={`size-8 rounded-full bg-muted grid place-items-center ${t.color}`}><Ic className="size-4" /></div>
+                  <div key={t.id} className="flex items-start gap-3 pb-3 border-b border-border last:border-0">
+                    <div className={`size-8 rounded-full bg-muted grid place-items-center ${color}`}><Ic className="size-4" /></div>
                     <div className="flex-1">
-                      <div className="text-xs">{t.title}</div>
+                      <div className="text-xs">{title}</div>
                       <div className="text-[10px] text-muted-foreground">{t.id}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-semibold">{t.amt}</div>
+                      <div className="font-semibold">{t.amount}</div>
                       <div className="text-[10px] text-muted-foreground">{formatDate(t.date)}</div>
                     </div>
                   </div>
                 );
               })}
+              {recentTransactions.length === 0 && (
+                <div className="py-6 text-center text-xs text-muted-foreground">No transactions yet</div>
+              )}
             </div>
           </div>
 

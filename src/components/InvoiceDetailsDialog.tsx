@@ -15,7 +15,7 @@ export function InvoiceDetailsDialog({
 }) {
   if (!invoice) return null;
 
-  const statusVariant: Record<string, any> = { Paid: "success", Pending: "warning", Overdue: "destructive" };
+  const statusVariant: Record<string, any> = { Paid: "success", Pending: "warning", "Partially Paid": "info", Overdue: "destructive", Refunded: "default" };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -37,6 +37,7 @@ export function InvoiceDetailsDialog({
             <div className="text-right">
               <div className="text-xs text-muted-foreground">Amount</div>
               <div className="font-semibold text-xl text-primary">{invoice.amount}</div>
+              <div className="text-xs text-muted-foreground mt-1">Paid: {invoice.paidAmount}</div>
             </div>
           </div>
 

@@ -37,6 +37,8 @@ import {
   CheckCircle2,
   Crown,
   UserPlus,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -72,13 +74,18 @@ export function DashboardLayout({
   const {
     notifications,
     logout,
+    settings,
     adminProfile,
     markNotificationRead,
     markAllNotificationsRead,
     deleteNotification,
   } = useAppContext();
 
-  const unreadCount = notifications.filter((n) => n.unread).length;
+  const visibleNotifications = settings.notifications.systemAlerts ? notifications : [];
+  const unreadCount = visibleNotifications.filter((n) => n.unread).length;
+  const studioNameParts = settings.studio.name.trim().split(/\s+/);
+  const studioTitle = studioNameParts[0] || "Podcast";
+  const studioAccent = studioNameParts.slice(1).join(" ") || "Studio";
 
   const sidebarContent = (
     <>
@@ -87,8 +94,8 @@ export function DashboardLayout({
           <Mic2 className="size-6 text-sidebar-accent" strokeWidth={2.2} />
         </div>
         <div className="leading-tight flex-1">
-          <div className="font-bold tracking-wide">PODCAST</div>
-          <div className="text-sidebar-accent text-sm font-semibold tracking-[0.2em]">STUDIO</div>
+          <div className="font-bold tracking-wide truncate uppercase">{studioTitle}</div>
+          <div className="text-sidebar-accent text-sm font-semibold tracking-[0.2em] truncate uppercase">{studioAccent}</div>
         </div>
         <button
           className="lg:hidden text-sidebar-foreground"
@@ -127,6 +134,7 @@ export function DashboardLayout({
         })}
       </nav>
 
+      {settings.booking.publicProfile && (
       <div className="p-3">
         <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3">
           <div className="size-9 rounded-full bg-sidebar-accent/20 grid place-items-center">
@@ -134,11 +142,12 @@ export function DashboardLayout({
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium">Need Help?</div>
-            <div className="text-xs text-sidebar-muted">Contact Support</div>
+            <div className="text-xs text-sidebar-muted truncate">{settings.studio.email}</div>
           </div>
           <ChevronRight className="size-4 text-sidebar-muted" />
         </div>
       </div>
+      )}
     </>
   );
 
@@ -205,7 +214,7 @@ export function DashboardLayout({
                   {notifications.length === 0 ? (
                     <div className="p-4 text-center text-xs text-muted-foreground">No notifications</div>
                   ) : (
-                    notifications.slice(0, 5).map((n) => {
+                    visibleNotifications.slice(0, 5).map((n) => {
                       const Icon = getIconComponent(n.iconName);
                       return (
                         <div
@@ -362,6 +371,7 @@ function ProfileSettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
   const [name, setName] = useState(adminProfile.name);
   const [email, setEmail] = useState(adminProfile.email);
   const [password, setPassword] = useState("••••••••");
+  const [showPassword, setShowPassword] = useState(false);
   const [bio, setBio] = useState(adminProfile.bio || "");
   const [avatarIndex, setAvatarIndex] = useState(adminProfile.avatarIndex);
 
@@ -445,14 +455,25 @@ function ProfileSettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-muted-foreground" htmlFor="profile-pwd">Password</label>
-            <input
-              id="profile-pwd"
-              type="password"
-              className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              title="Password"
-            />
+            <div className="relative">
+              <input
+                id="profile-pwd"
+                type={showPassword ? "text" : "password"}
+                className="w-full h-10 px-3 pr-10 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                title="Password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 size-7 rounded-md grid place-items-center text-muted-foreground hover:bg-muted"
+                title={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">

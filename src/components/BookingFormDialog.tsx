@@ -2,6 +2,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { useState, useEffect } from "react";
 import { useAppContext, type Booking } from "@/contexts/AppContext";
 import { toast } from "sonner";
+import { clampPaidAmount, currencySymbol, formatCurrency, parseCurrencyValue } from "@/lib/money";
+import { toYYYYMMDD, fromYYYYMMDD } from "@/lib/utils";
 
 // Standard 1-hour time slots
 const START_SLOTS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`);
@@ -36,13 +38,16 @@ export function BookingFormDialog({
   onOpenChange,
   bookingToEdit,
   defaultDate,
+  defaultGuest,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   bookingToEdit?: Booking;
   defaultDate?: string;
+  defaultGuest?: string;
 }) {
-  const { bookings, addBooking, updateBooking } = useAppContext();
+  const { bookings, packages, settings, addBooking, updateBooking } = useAppContext();
+  const moneySymbol = currencySymbol(settings.payment.currency);
 
   const [guest, setGuest] = useState("");
   const [studio, setStudio] = useState("Studio A");
@@ -52,6 +57,12 @@ export function BookingFormDialog({
   const [endSlot, setEndSlot] = useState("10:00");
   const [duration, setDuration] = useState<number | "">(1);
   const [status, setStatus] = useState<Booking["status"]>("Confirmed");
+  const [paymentStatus, setPaymentStatus] = useState<Booking["paymentStatus"]>("Unpaid");
+  const [paidAmount, setPaidAmount] = useState(() => formatCurrency(0));
+  const selectedPackage = packages.find((item) => item.name === pkg);
+  const totalAmount = selectedPackage?.price ?? formatCurrency(0, moneySymbol);
+
+  const bufferMinutes = Number(settings.booking.bufferTime.match(/\d+/)?.[0] ?? 0);
 
   // Helper to detect if a specific slot interval overlaps with existing bookings
   const isSlotOccupied = (shVal: number, ehVal: number) => {
@@ -61,8 +72,9 @@ export function BookingFormDialog({
       return b.date === date && b.studio === studio && b.status !== "Cancelled";
     });
     for (const b of existing) {
-      const [estart, eend] = parseTimeRange(b.time);
-      if (Math.max(shVal, estart) < Math.min(ehVal, eend)) {
+        const [estart, eend] = parseTimeRange(b.time);
+        const bufferHours = bufferMinutes / 60;
+        if (Math.max(shVal, estart - bufferHours) < Math.min(ehVal, eend + bufferHours)) {
         return true;
       }
     }
@@ -74,7 +86,7 @@ export function BookingFormDialog({
       setGuest(bookingToEdit.guest);
       setStudio(bookingToEdit.studio);
       setPkg(bookingToEdit.pkg);
-      setDate(bookingToEdit.date);
+      setDate(toYYYYMMDD(bookingToEdit.date));
       
       const [sh, eh] = parseTimeRange(bookingToEdit.time);
       const shStr = `${String(Math.floor(sh)).padStart(2, "0")}:00`;
@@ -84,17 +96,32 @@ export function BookingFormDialog({
       
       setDuration(bookingToEdit.duration !== undefined ? bookingToEdit.duration : (eh - sh));
       setStatus(bookingToEdit.status);
+      setPaymentStatus(bookingToEdit.paymentStatus ?? "Unpaid");
+      setPaidAmount(bookingToEdit.paidAmount ?? formatCurrency(0, moneySymbol));
     } else if (open) {
-      setGuest("");
+      setGuest(defaultGuest ?? "");
       setStudio("Studio A");
-      setPkg("Standard Package");
-      setDate(defaultDate || "");
+      setPkg(packages[0]?.name ?? "");
+      setDate(defaultDate ? toYYYYMMDD(defaultDate) : "");
       setStartSlot("09:00");
       setEndSlot("10:00");
       setDuration(1);
-      setStatus("Confirmed");
+      setStatus(settings.booking.requireApproval ? "Pending" : "Confirmed");
+      setPaymentStatus("Unpaid");
+      setPaidAmount(formatCurrency(0, moneySymbol));
     }
-  }, [open, bookingToEdit, defaultDate]);
+  }, [open, bookingToEdit, defaultDate, defaultGuest, packages, settings.booking.requireApproval, moneySymbol]);
+
+  useEffect(() => {
+    const total = parseCurrencyValue(totalAmount);
+    if (paymentStatus === "Paid") {
+      setPaidAmount(formatCurrency(total, moneySymbol));
+    } else if (paymentStatus === "Unpaid" || paymentStatus === "Refunded") {
+      setPaidAmount(formatCurrency(0, moneySymbol));
+    } else {
+      setPaidAmount(formatCurrency(clampPaidAmount(parseCurrencyValue(paidAmount), total), moneySymbol));
+    }
+  }, [paymentStatus, totalAmount, moneySymbol]);
 
   const handleStartSlotChange = (val: string) => {
     setStartSlot(val);
@@ -127,6 +154,11 @@ export function BookingFormDialog({
       return;
     }
 
+    if (!selectedPackage) {
+      toast.error("Create a package first, then select it for the booking.");
+      return;
+    }
+
     if (/^\d+$/.test(guest.trim())) {
       toast.error("Guest Name cannot be a raw numerical value.");
       return;
@@ -145,24 +177,27 @@ export function BookingFormDialog({
       return;
     }
 
-    const amtMap: Record<string, string> = {
-      "Basic Package": "₹2,500",
-      "Standard Package": "₹4,000",
-      "Pro Package": "₹6,000",
-      "Premium Package": "₹8,500",
-    };
-
     const compiledTimeStr = `${startSlot} to ${endSlot}`;
+    const normalizedPaidAmount = formatCurrency(
+      paymentStatus === "Paid"
+        ? parseCurrencyValue(totalAmount)
+        : paymentStatus === "Partially Paid"
+          ? clampPaidAmount(parseCurrencyValue(paidAmount), parseCurrencyValue(totalAmount))
+          : 0,
+      moneySymbol
+    );
 
     if (bookingToEdit) {
       updateBooking(bookingToEdit.id, {
         guest,
         studio,
         pkg,
-        date,
+        date: fromYYYYMMDD(date),
         time: compiledTimeStr,
         status,
-        amt: amtMap[pkg] || "₹0",
+        amt: totalAmount,
+        paymentStatus,
+        paidAmount: normalizedPaidAmount,
         duration: Number(duration),
       });
       toast.success("Booking updated successfully!");
@@ -171,10 +206,12 @@ export function BookingFormDialog({
         guest,
         studio,
         pkg,
-        date,
+        date: fromYYYYMMDD(date),
         time: compiledTimeStr,
         status,
-        amt: amtMap[pkg] || "₹0",
+        amt: totalAmount,
+        paymentStatus,
+        paidAmount: normalizedPaidAmount,
         duration: Number(duration),
       });
       toast.success("New booking created successfully!");
@@ -231,21 +268,72 @@ export function BookingFormDialog({
                 onChange={(e) => setPkg(e.target.value)}
                 title="Select Package"
               >
-                <option>Basic Package</option>
-                <option>Standard Package</option>
-                <option>Pro Package</option>
-                <option>Premium Package</option>
+                {packages.length === 0 ? (
+                  <option value="">No packages available</option>
+                ) : packages.map((item) => (
+                  <option key={item.id} value={item.name}>{item.name}</option>
+                ))}
+              </select>
+              {packages.length === 0 && (
+                <div className="text-[11px] text-destructive">Add a package in Packages before creating bookings.</div>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="booking-amount">Amount</label>
+              <input
+                id="booking-amount"
+                className="w-full h-10 px-3 rounded-md border border-border bg-muted text-sm text-muted-foreground"
+                value={totalAmount}
+                readOnly
+                title="Amount is calculated from the selected package"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="booking-payment-status">Payment Status</label>
+              <select
+                id="booking-payment-status"
+                className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={paymentStatus}
+                onChange={(e) => setPaymentStatus(e.target.value as Booking["paymentStatus"])}
+                title="Payment Status"
+              >
+                <option>Unpaid</option>
+                <option>Partially Paid</option>
+                <option>Paid</option>
+                {bookingToEdit && <option>Refunded</option>}
               </select>
             </div>
+          </div>
+          {paymentStatus === "Partially Paid" && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="booking-paid-amount">Paid Amount</label>
+              <input
+                id="booking-paid-amount"
+                className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(e.target.value)}
+                onBlur={() => setPaidAmount(formatCurrency(clampPaidAmount(parseCurrencyValue(paidAmount), parseCurrencyValue(totalAmount)), moneySymbol))}
+                title="Paid Amount"
+              />
+            </div>
+          )}
+          {settings.booking.requireApproval && !bookingToEdit && (
+            <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+              Manual approval is enabled, so new bookings start as Pending.
+            </div>
+          )}
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Studio features for new sessions: {settings.booking.videoRecording ? "video recording on" : "audio only"}, {settings.booking.liveStreaming ? "live streaming on" : "live streaming off"}, {settings.booking.guestUploads ? "guest uploads allowed" : "guest uploads off"}.
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="booking-date">Date</label>
               <input
                 id="booking-date"
-                type="text"
+                type="date"
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                placeholder="25 May 2025"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 title="Date"
@@ -295,11 +383,11 @@ export function BookingFormDialog({
                 title="Select Starting Time Slot"
               >
                 {START_SLOTS.map((slot, i) => {
-                  // Block/gray out if [i, i+1] is occupied
+                  // Block/gray out if [i, i+1] conflicts with an existing booking plus the configured buffer.
                   const occupied = isSlotOccupied(i, i + 1);
                   return (
                     <option key={slot} value={slot} disabled={occupied} className={occupied ? "text-muted-foreground bg-muted/30" : ""}>
-                      {slot} {occupied ? "(Booked)" : ""}
+                      {slot} {occupied ? `(Booked${bufferMinutes ? ` + ${bufferMinutes}m buffer` : ""})` : ""}
                     </option>
                   );
                 })}
@@ -322,7 +410,7 @@ export function BookingFormDialog({
                   const disabled = isPast || occupied;
                   return (
                     <option key={slot} value={slot} disabled={disabled} className={disabled ? "text-muted-foreground bg-muted/30" : ""}>
-                      {slot} {occupied ? "(Booked)" : ""}
+                      {slot} {occupied ? `(Booked${bufferMinutes ? ` + ${bufferMinutes}m buffer` : ""})` : ""}
                     </option>
                   );
                 })}
@@ -341,7 +429,7 @@ export function BookingFormDialog({
             >
               <option>Confirmed</option>
               <option>Pending</option>
-              <option>Cancelled</option>
+              {bookingToEdit && <option>Cancelled</option>}
               <option>Completed</option>
             </select>
           </div>
@@ -355,9 +443,10 @@ export function BookingFormDialog({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 cursor-pointer"
+              disabled={packages.length === 0}
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {bookingToEdit ? "Save Changes" : "Book Studio"}
+              {bookingToEdit ? "Save Changes" : settings.booking.requireApproval ? "Request Booking Approval" : "Book Studio"}
             </button>
           </DialogFooter>
         </form>

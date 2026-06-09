@@ -79,7 +79,7 @@ function Episodes() {
       let matchesDate = true;
       if (publishedDateFilter) {
         try {
-          const eDate = new Date(e.date);
+          const eDate = new Date(e.publishedDate || "");
           const fDate = new Date(publishedDateFilter);
           matchesDate = eDate.getFullYear() === fDate.getFullYear() &&
                         eDate.getMonth() === fDate.getMonth() &&
@@ -114,11 +114,11 @@ function Episodes() {
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        <StatCard icon={PlayCircle} label="Total Episodes" value={episodes.length.toString()} trend="↑ 12% from last month" tone="primary" />
-        <StatCard icon={CheckCircle2} label="Published" value={episodes.filter(e => e.status === "Published").length.toString()} trend="67% of total" tone="success" />
-        <StatCard icon={Clock} label="Scheduled" value={episodes.filter(e => e.status === "Scheduled").length.toString()} trend="16% of total" tone="warning" />
-        <StatCard icon={FileEdit} label="Drafts" value={episodes.filter(e => e.status === "Draft").length.toString()} trend="12% of total" tone="info" />
-        <StatCard icon={Trash2} label="Archived" value={episodes.filter(e => e.status === "Archived").length.toString()} trend="5% of total" tone="destructive" />
+        <StatCard icon={PlayCircle} label="Total Episodes" value={episodes.length.toString()} trend="All local records" tone="primary" />
+        <StatCard icon={CheckCircle2} label="Published" value={episodes.filter(e => e.status === "Published").length.toString()} trend="Published records" tone="success" />
+        <StatCard icon={Clock} label="Scheduled" value={episodes.filter(e => e.status === "Scheduled").length.toString()} trend="Scheduled records" tone="warning" />
+        <StatCard icon={FileEdit} label="Drafts" value={episodes.filter(e => e.status === "Draft").length.toString()} trend="Draft records" tone="info" />
+        <StatCard icon={Trash2} label="Archived" value={episodes.filter(e => e.status === "Archived").length.toString()} trend="Archived records" tone="destructive" />
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-5">
@@ -232,7 +232,7 @@ function Episodes() {
                   <td className="p-4">
                     {e.date === "—" ? <span className="text-muted-foreground">—</span> : (
                       <div>
-                        <div>{formatDate(e.date)}</div>
+                        <div>{formatDate(e.publishedDate || e.date)}</div>
                         <div className="text-xs text-muted-foreground">{formatTime(e.time)}</div>
                       </div>
                     )}

@@ -29,9 +29,11 @@ import {
 import { useMemo, useState } from "react";
 import { PackageFormDialog } from "@/components/PackageFormDialog";
 import { toast } from "sonner";
+import { currencySymbol, formatCurrency, parseCurrencyValue, totalRevenue as calculateTotalRevenue } from "@/lib/money";
 
 function Packages() {
-  const { packages, deletePackage } = useAppContext();
+  const { packages, bookings, invoices, settings, deletePackage } = useAppContext();
+  const moneySymbol = currencySymbol(settings.payment.currency);
   const [formOpen, setFormOpen] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<Package | undefined>(undefined);
   const [initialPackage, setInitialPackage] = useState<Omit<Package, "id"> | undefined>(undefined);
@@ -77,6 +79,18 @@ function Packages() {
   };
 
   const visiblePackages = viewAllPackages ? filteredPackages : filteredPackages.slice(0, 6);
+  const popularPackage = useMemo(
+    () => packages.reduce<Package | undefined>((top, pkg) => (!top || pkg.bookings > top.bookings ? pkg : top), undefined),
+    [packages]
+  );
+  const packagePrices = useMemo(
+    () => packages.map((pkg) => parseCurrencyValue(pkg.price)).filter((price) => price > 0),
+    [packages]
+  );
+  const averagePrice = packagePrices.length > 0
+    ? Math.round(packagePrices.reduce((sum, price) => sum + price, 0) / packagePrices.length)
+    : 0;
+  const paidRevenue = calculateTotalRevenue(bookings, invoices);
   const defaultCustomPackage: Omit<Package, "id"> = {
     iconName: "InfinityIcon",
     color: "bg-destructive",
@@ -111,10 +125,10 @@ function Packages() {
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard icon={Tag} label="Total Packages" value={packages.length.toString()} trend="Active packages" tone="primary" />
-        <StatCard icon={CheckCircle2} label="Most Popular" value="Pro Package" trend="42% of bookings" tone="success" />
-        <StatCard icon={Tag} label="Avg. Price" value="₹4,167" trend="Across all packages" tone="warning" />
-        <StatCard icon={CalendarDays} label="Total Bookings" value="1,248" trend="This month" tone="info" />
-        <StatCard icon={TrendingUp} label="Revenue" value="₹5,20,000" trend="This month" tone="pink" />
+        <StatCard icon={CheckCircle2} label="Most Popular" value={popularPackage?.name ?? "None"} trend={popularPackage ? `${popularPackage.bookings} package bookings` : "No package bookings"} tone="success" />
+        <StatCard icon={Tag} label="Avg. Price" value={formatCurrency(averagePrice, moneySymbol)} trend="Across priced packages" tone="warning" />
+        <StatCard icon={CalendarDays} label="Total Bookings" value={bookings.length.toString()} trend="All local records" tone="info" />
+        <StatCard icon={TrendingUp} label="Revenue" value={formatCurrency(paidRevenue, moneySymbol)} trend="Paid bookings and invoices" tone="pink" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 mt-6">
@@ -232,6 +246,11 @@ function Packages() {
                   </div>
                 );
               })}
+              {visiblePackages.length === 0 && (
+                <div className="md:col-span-2 lg:col-span-3 py-12 text-center text-sm text-muted-foreground">
+                  No packages found. Add a package when you are ready to sell one.
+                </div>
+              )}
             </div>
 
             {viewAllPackages ? (

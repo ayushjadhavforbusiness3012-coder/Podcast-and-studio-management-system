@@ -12,6 +12,15 @@ export function BookingDetailsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   if (!booking) return null;
+  const shouldHidePayment =
+    (booking.status === "Cancelled" && booking.paymentStatus === "Refunded")
+    || (booking.status === "Completed" && booking.paymentStatus === "Paid");
+  const paymentVariant: Record<string, any> = {
+    Unpaid: "warning",
+    "Partially Paid": "info",
+    Paid: "success",
+    Refunded: "destructive",
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -46,10 +55,19 @@ export function BookingDetailsDialog({
               <div className="text-sm text-muted-foreground mb-1">Time</div>
               <div className="font-medium">{booking.time}</div>
             </div>
-            <div>
-              <div className="text-sm text-muted-foreground mb-1">Amount</div>
-              <div className="font-medium text-primary">{booking.amt}</div>
-            </div>
+            {!shouldHidePayment && (
+              <>
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Amount</div>
+                  <div className="font-medium text-primary">{booking.amt}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Payment</div>
+                  <Badge variant={paymentVariant[booking.paymentStatus]}>{booking.paymentStatus}</Badge>
+                  <div className="text-xs text-muted-foreground mt-1">Paid: {booking.paidAmount}</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>

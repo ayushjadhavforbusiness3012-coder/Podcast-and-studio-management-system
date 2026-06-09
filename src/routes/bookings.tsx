@@ -117,13 +117,12 @@ function Bookings() {
     return "2 Hours"; 
   };
 
-  const getPaymentStatus = (status: string) => {
+  const getPaymentStatus = (status: Booking["paymentStatus"]) => {
     switch (status) {
-      case "Confirmed": return { label: "Paid", var: "success" };
-      case "Pending": return { label: "Pending", var: "warning" };
-      case "Cancelled": return { label: "Refunded", var: "destructive" };
-      case "Completed": return { label: "Paid", var: "success" };
-      default: return { label: "Unpaid", var: "default" };
+      case "Paid": return { label: "Paid", var: "success" };
+      case "Partially Paid": return { label: "Partially Paid", var: "info" };
+      case "Refunded": return { label: "Refunded", var: "destructive" };
+      default: return { label: "Unpaid", var: "warning" };
     }
   };
 
@@ -179,10 +178,10 @@ function Bookings() {
     >
       {/* Metric Box Header: Statistical summary row enclosed inside panels */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard icon={CalendarDays} label="Total Bookings" value={bookings.length.toString()} trend="↑ 18.6% vs last month" tone="primary" />
-        <StatCard icon={CheckCircle2} label="Confirmed" value={bookings.filter(b => b.status === "Confirmed").length.toString()} trend="84% of total" tone="success" />
-        <StatCard icon={Clock} label="Pending" value={bookings.filter(b => b.status === "Pending").length.toString()} trend="↑ 5% vs last month" tone="warning" />
-        <StatCard icon={XCircle} label="Cancelled" value={bookings.filter(b => b.status === "Cancelled").length.toString()} trend="↓ 2% vs last month" trendType="down" tone="destructive" />
+        <StatCard icon={CalendarDays} label="Total Bookings" value={bookings.length.toString()} trend="All local records" tone="primary" />
+        <StatCard icon={CheckCircle2} label="Confirmed" value={bookings.filter(b => b.status === "Confirmed").length.toString()} trend="Confirmed records" tone="success" />
+        <StatCard icon={Clock} label="Pending" value={bookings.filter(b => b.status === "Pending").length.toString()} trend="Awaiting confirmation" tone="warning" />
+        <StatCard icon={XCircle} label="Cancelled" value={bookings.filter(b => b.status === "Cancelled").length.toString()} trend="Cancelled records" trendType="down" tone="destructive" />
       </div>
 
       {/* Filter Bardirectly underneath the metrics */}
@@ -277,7 +276,7 @@ function Bookings() {
             </thead>
             <tbody>
               {paginatedBookings.map((r) => {
-                const payStatus = getPaymentStatus(r.status);
+                const payStatus = getPaymentStatus(r.paymentStatus);
                 
                 // Set color indicator on the left side of the row cell block
                 let statusBorderClass = "border-l-4 border-l-transparent";
@@ -304,6 +303,7 @@ function Bookings() {
                     <td className="p-4 font-semibold text-foreground">{r.amt}</td>
                     <td className="p-4">
                       <Badge variant={payStatus.var as any}>{payStatus.label}</Badge>
+                      <div className="text-[10px] text-muted-foreground mt-1">Paid {r.paidAmount}</div>
                     </td>
                     <td className="p-4">
                       <div className="flex gap-1">
@@ -416,7 +416,7 @@ function Bookings() {
                 setExportOpen(false);
                 // CSV formatting:
                 let csvContent = "data:text/csv;charset=utf-8," 
-                  + "Booking ID,Studio,Guest / Client,Date,Time,Duration,Status,Amount\n";
+                  + "Booking ID,Studio,Guest / Client,Date,Time,Duration,Status,Amount,Payment Status,Paid Amount\n";
                 
                 filteredBookings.forEach((b) => {
                   const row = [
@@ -427,7 +427,9 @@ function Bookings() {
                     `"${b.time.replace(/"/g, '""')}"`,
                     b.duration !== undefined ? `${b.duration} Hours` : "2 Hours",
                     b.status,
-                    `"${b.amt.replace(/"/g, '""')}"`
+                    `"${b.amt.replace(/"/g, '""')}"`,
+                    b.paymentStatus,
+                    `"${b.paidAmount.replace(/"/g, '""')}"`
                   ].join(",");
                   csvContent += row + "\n";
                 });

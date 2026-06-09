@@ -5,6 +5,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { BookingFormDialog } from "@/components/BookingFormDialog";
 import { GuestFormDialog } from "@/components/GuestFormDialog";
 import { EpisodeFormDialog } from "@/components/EpisodeFormDialog";
+import { bookingRevenue, currencySymbol, formatCurrency, totalRevenue as calculateTotalRevenue, invoiceRevenue } from "@/lib/money";
 import { useState, useMemo } from "react";
 import {
   CalendarDays,
@@ -49,16 +50,17 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-const studioData = [
-  { name: "Studio A", value: 45, color: "#8b5cf6", bgClass: "bg-[#8b5cf6]" }, // purple
-  { name: "Studio B", value: 30, color: "#3b82f6", bgClass: "bg-[#3b82f6]" }, // blue
-  { name: "Studio C", value: 25, color: "#10b981", bgClass: "bg-[#10b981]" }, // green
-];
+const studioColors = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#14b8a6"];
 
-// Helper helper definitions
+function parseRecordDate(dateStr: string) {
+  if (!dateStr || dateStr === "—" || dateStr === "â€”") return null;
+  const parsed = new Date(dateStr);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 function Dashboard() {
-  const { bookings, guests, episodes, invoices, addNotification, formatDate, formatTime } = useAppContext();
+  const { bookings, guests, episodes, invoices, settings, addNotification, formatDate, formatTime } = useAppContext();
+  const moneySymbol = currencySymbol(settings.payment.currency);
 
   // Helper to format recent booking dates stripping the year value
   const formatRecentBookingTime = (dateStr: string, timeStr: string) => {
@@ -76,12 +78,12 @@ function Dashboard() {
   // Selector state for Revenue Overview
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  // Dynamic calculations based on state
-  const totalBookings = 1248 + bookings.length;
-  const totalGuests = 142 + guests.length;
-  const totalRevenue = "₹5,20,000";
+  // Dynamic calculations based on database-backed state
+  const totalBookings = bookings.length;
+  const totalGuests = guests.length;
+  const totalRevenue = calculateTotalRevenue(bookings, invoices);
   const upcomingBookingsCount = bookings.filter(b => b.status === "Confirmed" || b.status === "Pending").length;
-  const episodesPublishedCount = 38 + episodes.filter(e => e.status === "Published").length;
+  const episodesPublishedCount = episodes.filter(e => e.status === "Published").length;
 
   const recentBookings = bookings.slice(0, 5);
   const upcomingList = useMemo(() => {
@@ -96,82 +98,76 @@ function Dashboard() {
     "July", "August", "September", "October", "November", "December"
   ], []);
 
-  // Booking Overview Data logic (only from June 2026 onwards, blank otherwise)
+  // Booking overview uses real bookings for the selected month in the current year.
   const bookingOverviewData = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonthIdx = now.getMonth();
-    const currentDay = now.getDate();
-
+    const currentYear = new Date().getFullYear();
     const selIdx = monthNames.indexOf(selectedMonth);
-    
-    // Project was created in June 2026 (index 5)
-    // If before June, show blank
-    if (selIdx < 5) return [];
-    // If in the future, show blank
-    if (selIdx > currentMonthIdx) return [];
+    const totalDays = new Date(currentYear, selIdx + 1, 0).getDate();
 
-    let totalDays = 0;
-    if (selIdx === currentMonthIdx) {
-      totalDays = currentDay;
-    } else {
-      totalDays = new Date(currentYear, selIdx + 1, 0).getDate();
-    }
+    return Array.from({ length: totalDays }, (_, index) => {
+      const day = index + 1;
+      const count = bookings.filter((booking) => {
+        const date = parseRecordDate(booking.date);
+        return date?.getFullYear() === currentYear && date.getMonth() === selIdx && date.getDate() === day;
+      }).length;
+      return { name: `${selectedMonth.substring(0, 3)} ${day}`, bookings: count };
+    });
+  }, [selectedMonth, monthNames, bookings]);
 
-    const data = [];
-    for (let d = 1; d <= totalDays; d++) {
-      // Seeded random number generator so mock data stays consistent per day/month
-      const val = Math.floor(10 + ((d * 7 + selIdx * 13) % 25));
-      data.push({
-        name: `${selectedMonth.substring(0, 3)} ${d}`,
-        bookings: val
-      });
-    }
-    return data;
-  }, [selectedMonth, monthNames]);
-
-  // Status Summary Counts logic (0 if month is blank/future)
+  // Status summary counts real bookings for the selected month in the current year.
   const statusSummaryCounts = useMemo(() => {
-    const now = new Date();
-    const currentMonthIdx = now.getMonth();
+    const currentYear = new Date().getFullYear();
     const selIdx = monthNames.indexOf(selectedMonth);
-
-    if (selIdx < 5 || selIdx > currentMonthIdx) {
-      return { confirmed: 0, pending: 0, completed: 0, cancelled: 0 };
-    }
+    const bookingsForMonth = bookings.filter((booking) => {
+      const date = parseRecordDate(booking.date);
+      return date?.getFullYear() === currentYear && date.getMonth() === selIdx;
+    });
 
     return {
-      confirmed: bookings.filter(b => b.status === "Confirmed").length + 25,
-      pending: bookings.filter(b => b.status === "Pending").length + 8,
-      completed: bookings.filter(b => b.status === "Completed").length + 15,
-      cancelled: bookings.filter(b => b.status === "Cancelled").length + 3
+      confirmed: bookingsForMonth.filter(b => b.status === "Confirmed").length,
+      pending: bookingsForMonth.filter(b => b.status === "Pending").length,
+      completed: bookingsForMonth.filter(b => b.status === "Completed").length,
+      cancelled: bookingsForMonth.filter(b => b.status === "Cancelled").length
     };
   }, [selectedMonth, monthNames, bookings]);
 
-  // Revenue Overview Data logic
+  // Revenue overview groups paid invoices by month for the selected year.
   const revenueOverviewData = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonthIdx = now.getMonth();
-    
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const baseRevenue = [45000, 52000, 49000, 63000, 85000, 78000, 90000, 85000, 95000, 100000, 110000, 120000];
-
     return months.map((m, idx) => {
-      let revenue = baseRevenue[idx];
-      // Future year/month logic:
-      if (selectedYear > currentYear) {
-        revenue = 0;
-      } else if (selectedYear === currentYear && idx > currentMonthIdx) {
-        revenue = 0;
-      }
-      return { name: m, revenue };
+      const revenue = invoices
+        .filter((invoice) => {
+          const date = parseRecordDate(invoice.date);
+          return date?.getFullYear() === selectedYear && date.getMonth() === idx;
+        })
+        .reduce((sum, invoice) => sum + invoiceRevenue(invoice), 0);
+      const bookingRevenueTotal = bookings
+        .filter((booking) => {
+          const date = parseRecordDate(booking.date);
+          return date?.getFullYear() === selectedYear && date.getMonth() === idx;
+        })
+        .reduce((sum, booking) => sum + bookingRevenue(booking), 0);
+      return { name: m, revenue: revenue + bookingRevenueTotal };
     });
-  }, [selectedYear]);
+  }, [selectedYear, invoices, bookings]);
 
   const totalEarnedThisYear = useMemo(() => {
     return revenueOverviewData.reduce((sum, item) => sum + item.revenue, 0);
   }, [revenueOverviewData]);
+
+  const studioData = useMemo(() => {
+    const counts = bookings.reduce<Record<string, number>>((acc, booking) => {
+      acc[booking.studio] = (acc[booking.studio] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(counts).map(([name, count], index) => ({
+      name,
+      count,
+      value: bookings.length > 0 ? Math.round((count / bookings.length) * 100) : 0,
+      color: studioColors[index % studioColors.length],
+    }));
+  }, [bookings]);
 
   // Dynamic years dropdown starting from genesis year 2026
   const targetYears = useMemo(() => {
@@ -199,11 +195,11 @@ function Dashboard() {
     >
       {/* Top Metric Panels Grid - 5 columns side-by-side */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard icon={CalendarDays} label="Total Bookings" value={totalBookings.toLocaleString()} trend="↑ 18.6% vs last month" tone="primary" />
-        <StatCard icon={Users} label="Total Guests" value={totalGuests.toLocaleString()} trend="↑ 12.4% vs last month" tone="info" />
-        <StatCard icon={Wallet} label="Total Revenue" value={totalRevenue} trend="↑ 24.4% vs last month" tone="success" />
+        <StatCard icon={CalendarDays} label="Total Bookings" value={totalBookings.toLocaleString()} trend="All local records" tone="primary" />
+        <StatCard icon={Users} label="Total Guests" value={totalGuests.toLocaleString()} trend="All local records" tone="info" />
+        <StatCard icon={Wallet} label="Total Revenue" value={formatCurrency(totalRevenue, moneySymbol)} trend="Paid invoices" tone="success" />
         <StatCard icon={CalendarCheck} label="Upcoming Bookings" value={upcomingBookingsCount.toString()} trend="Active schedule" tone="pink" />
-        <StatCard icon={Mic2} label="Episodes Published" value={episodesPublishedCount.toString()} trend="↑ 8.2% vs last month" tone="warning" />
+        <StatCard icon={Mic2} label="Episodes Published" value={episodesPublishedCount.toString()} trend="Published episodes" tone="warning" />
       </div>
 
       {/* Upper Charts Section */}
@@ -239,7 +235,7 @@ function Dashboard() {
                 <LineChart data={bookingOverviewData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                   <CartesianGrid stroke="#f1f5f9" vertical={false} />
                   <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} />
-                  <YAxis stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} ticks={[0, 10, 20, 30, 40]} domain={[0, 40]} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} allowDecimals={false} domain={[0, "dataMax"]} />
                   <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
                   <Line type="linear" dataKey="bookings" stroke="#8b5cf6" strokeWidth={2.5} activeDot={{ r: 6 }} dot={{ strokeWidth: 2, r: 3 }} isAnimationActive={false} className="booking-overview-line" />
                 </LineChart>
@@ -285,7 +281,7 @@ function Dashboard() {
           </div>
           {/* Dynamic Annual Total Metric Banner */}
           <div className="bg-primary/10 text-primary px-3 py-1.5 rounded-lg text-xs font-bold mb-2">
-            Total Earned This Year: ₹{totalEarnedThisYear.toLocaleString("en-IN")}
+            Total Earned This Year: {formatCurrency(totalEarnedThisYear, moneySymbol)}
           </div>
           <div className="w-full h-36 overflow-x-auto">
             <div className="min-w-[450px] h-full">
@@ -293,8 +289,8 @@ function Dashboard() {
                 <BarChart data={revenueOverviewData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
                   <CartesianGrid stroke="#f1f5f9" vertical={false} />
                   <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} />
-                  <YAxis stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} tickFormatter={(v) => `₹${Number(v) / 1000}k`} ticks={[0, 10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000]} domain={[0, 120000]} />
-                  <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 9 }} tickLine={false} axisLine={true} tickFormatter={(v) => formatCurrency(Number(v), moneySymbol)} domain={[0, "dataMax"]} />
+                  <Tooltip formatter={(value) => formatCurrency(Number(value), moneySymbol)} contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
                   <Bar dataKey="revenue" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -341,30 +337,36 @@ function Dashboard() {
         <div className="bg-card rounded-2xl border border-border p-5 flex flex-col justify-between shadow-sm">
           <div>
             <h2 className="font-semibold text-foreground mb-3">Booking by Studio</h2>
-            <div className="relative size-36 mx-auto mt-2 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={studioData} innerRadius={42} outerRadius={62} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={3}>
-                    {studioData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute text-center">
-                <div className="text-xl font-bold text-foreground">100</div>
-                <div className="text-[9px] text-muted-foreground uppercase font-medium">Bookings</div>
+            {studioData.length > 0 ? (
+              <div className="relative size-36 mx-auto mt-2 flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={studioData} innerRadius={42} outerRadius={62} dataKey="count" startAngle={90} endAngle={-270} strokeWidth={3}>
+                      {studioData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute text-center">
+                  <div className="text-xl font-bold text-foreground">{bookings.length}</div>
+                  <div className="text-[9px] text-muted-foreground uppercase font-medium">Bookings</div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="size-36 mx-auto mt-2 rounded-full border border-dashed border-border flex items-center justify-center text-center text-xs text-muted-foreground px-4">
+                No studio bookings yet
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1.5 mt-4 text-xs text-muted-foreground">
             {studioData.map((s) => (
               <div key={s.name} className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 font-medium text-foreground">
-                  <span className={`size-2 rounded-full ${s.bgClass}`} />
+                  <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />
                   {s.name}
                 </span>
-                <span className="font-bold text-foreground">{s.value}%</span>
+                <span className="font-bold text-foreground">{s.count} ({s.value}%)</span>
               </div>
             ))}
           </div>

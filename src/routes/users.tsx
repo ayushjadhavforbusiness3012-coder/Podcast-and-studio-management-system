@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout, StatCard, Badge } from "@/components/DashboardLayout";
-import { Users, CheckCircle2, ShieldCheck, Pencil, Eye, Filter, RotateCcw, ChevronLeft, ChevronRight, UserCog, Trash2, CheckCircle, Plus, Download, FileText } from "lucide-react";
+import { Users, CheckCircle2, ShieldCheck, Pencil, Eye, Filter, RotateCcw, ChevronLeft, ChevronRight, UserCog, Trash2, Plus, Download, FileText } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -18,7 +18,6 @@ function UsersPage() {
   const [tempStatus, setTempStatus] = useState("All Statuses");
   const [roleFilter, setRoleFilter] = useState("All Roles");
   const [statusFilter, setStatusFilter] = useState("All Statuses");
-  const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
@@ -44,21 +43,6 @@ function UsersPage() {
     return filteredUsers.slice(start, start + itemsPerPage);
   }, [filteredUsers, currentPage, itemsPerPage]);
 
-  const handleToggleSelect = (idx: number) => {
-    const next = new Set(selectedIdxs);
-    if (next.has(idx)) next.delete(idx);
-    else next.add(idx);
-    setSelectedIdxs(next);
-  };
-
-  const handleToggleAll = () => {
-    if (selectedIdxs.size === filteredUsers.length && filteredUsers.length > 0) {
-      setSelectedIdxs(new Set());
-    } else {
-      setSelectedIdxs(new Set(filteredUsers.map((u) => u._idx)));
-    }
-  };
-
   const handleApplyFilters = () => {
     setRoleFilter(tempRole);
     setStatusFilter(tempStatus);
@@ -71,16 +55,8 @@ function UsersPage() {
     setTempStatus("All Statuses");
     setRoleFilter("All Roles");
     setStatusFilter("All Statuses");
-    setSelectedIdxs(new Set());
     setCurrentPage(1);
     toast.info("Filters reset");
-  };
-
-  const handleDeleteSelected = () => {
-    const sorted = Array.from(selectedIdxs).sort((a, b) => b - a);
-    sorted.forEach((i) => deleteUser(i));
-    toast.success(`${sorted.length} user(s) deleted`);
-    setSelectedIdxs(new Set());
   };
 
   const handleToggleStatus = (idx: number) => {
@@ -94,6 +70,7 @@ function UsersPage() {
   const adminCount = users.filter((u) => u.role === "Super Admin" || u.role === "Admin").length;
   const editorCount = users.filter((u) => u.role === "Editor").length;
   const viewerCount = users.filter((u) => u.role === "Viewer").length;
+  const percentOfUsers = (count: number) => users.length > 0 ? `${Math.round((count / users.length) * 100)}% of total` : "0% of total";
 
   return (
     <DashboardLayout
@@ -101,11 +78,6 @@ function UsersPage() {
       subtitle="Manage team members and user permissions"
       actions={
         <>
-          {selectedIdxs.size > 0 && (
-            <button onClick={handleDeleteSelected} className="h-10 px-4 rounded-lg border border-destructive/30 text-destructive bg-destructive/10 text-sm font-medium inline-flex items-center gap-2 cursor-pointer">
-              <Trash2 className="size-4" /> Delete ({selectedIdxs.size})
-            </button>
-          )}
           <button 
             onClick={() => setExportOpen(true)}
             className="h-10 px-4 rounded-lg border border-border bg-card text-sm font-medium inline-flex items-center gap-2 hover:bg-muted transition-colors cursor-pointer"
@@ -128,10 +100,10 @@ function UsersPage() {
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard icon={Users} label="Total Users" value={users.length.toString()} trend={`${activeCount} active`} tone="primary" />
-        <StatCard icon={CheckCircle2} label="Active Users" value={activeCount.toString()} trend={`${Math.round((activeCount / users.length) * 100)}% of total`} tone="success" />
-        <StatCard icon={ShieldCheck} label="Admins" value={adminCount.toString()} trend={`${Math.round((adminCount / users.length) * 100)}% of total`} tone="warning" />
-        <StatCard icon={Pencil} label="Editors" value={editorCount.toString()} trend={`${Math.round((editorCount / users.length) * 100)}% of total`} tone="info" />
-        <StatCard icon={Eye} label="Viewers" value={viewerCount.toString()} trend={`${Math.round((viewerCount / users.length) * 100)}% of total`} tone="pink" />
+        <StatCard icon={CheckCircle2} label="Active Users" value={activeCount.toString()} trend={percentOfUsers(activeCount)} tone="success" />
+        <StatCard icon={ShieldCheck} label="Admins" value={adminCount.toString()} trend={percentOfUsers(adminCount)} tone="warning" />
+        <StatCard icon={Pencil} label="Editors" value={editorCount.toString()} trend={percentOfUsers(editorCount)} tone="info" />
+        <StatCard icon={Eye} label="Viewers" value={viewerCount.toString()} trend={percentOfUsers(viewerCount)} tone="pink" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
@@ -177,16 +149,6 @@ function UsersPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-muted-foreground">
                   <tr>
-                    <th className="p-4 text-left">
-                      <input
-                        type="checkbox"
-                        checked={selectedIdxs.size === filteredUsers.length && filteredUsers.length > 0}
-                        onChange={handleToggleAll}
-                        className="size-4 rounded border-border"
-                        title="Select all users"
-                        aria-label="Select all users"
-                      />
-                    </th>
                     <th className="p-4 text-left font-medium">User</th>
                     <th className="p-4 text-left font-medium">Email</th>
                     <th className="p-4 text-left font-medium">Role</th>
@@ -203,18 +165,8 @@ function UsersPage() {
                     else if (u.status === "Inactive") statusBorderClass = "border-l-4 border-l-destructive";
 
                     return (
-                      <tr key={u._idx} className={`border-t border-border transition-colors ${selectedIdxs.has(u._idx) ? "bg-primary/5" : "hover:bg-muted/30"}`}>
+                      <tr key={u._idx} className="border-t border-border transition-colors hover:bg-muted/30">
                         <td className={`p-4 ${statusBorderClass}`}>
-                          <input
-                            type="checkbox"
-                            checked={selectedIdxs.has(u._idx)}
-                            onChange={() => handleToggleSelect(u._idx)}
-                            className="size-4 rounded border-border ml-1"
-                            title={`Select user ${u.name}`}
-                            aria-label={`Select user ${u.name}`}
-                          />
-                        </td>
-                        <td className="p-4">
                           <div className="flex items-center gap-3">
                             <img src={`https://i.pravatar.cc/64?img=${u.img}`} className="size-9 rounded-full" alt="" />
                             <div className="flex items-center gap-2">
@@ -245,7 +197,6 @@ function UsersPage() {
                               onClick={() => {
                                 deleteUser(u._idx);
                                 toast.success(`${u.name} deleted`);
-                                setSelectedIdxs(new Set());
                               }}
                               className="size-8 rounded-md border border-border grid place-items-center text-destructive hover:bg-destructive/10"
                               title="Delete user"
@@ -336,23 +287,9 @@ function UsersPage() {
               <a className="text-xs text-primary cursor-pointer">View All</a>
             </div>
             <div className="space-y-3 text-sm">
-              {[
-                { icon: CheckCircle, color: "bg-success/15 text-success", title: "Rahul Verma logged in", time: "Today, 10:30 AM" },
-                { icon: UserCog, color: "bg-info/15 text-info", title: "Sneha Sharma updated settings", time: "Today, 09:20 AM" },
-                { icon: Pencil, color: "bg-warning/20 text-warning-foreground", title: "Amit Kumar updated studio booking", time: "Yesterday, 05:45 PM" },
-                { icon: UserCog, color: "bg-pink/20 text-pink-foreground", title: "Karan Malhotra modified user permissions", time: "5 Feb 2025, 02:10 PM" },
-              ].map((a, i) => {
-                const Ic = a.icon;
-                return (
-                  <div key={i} className="flex gap-3">
-                    <div className={`size-8 rounded-full ${a.color} grid place-items-center shrink-0`}><Ic className="size-4" /></div>
-                    <div>
-                      <div className="text-xs">{a.title}</div>
-                      <div className="text-[10px] text-muted-foreground">{a.time}</div>
-                    </div>
-                  </div>
-                );
-              })}
+              <div className="py-6 text-center text-xs text-muted-foreground">
+                No user activity has been recorded yet.
+              </div>
             </div>
           </div>
         </div>

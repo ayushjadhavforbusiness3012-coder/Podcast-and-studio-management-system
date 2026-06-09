@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Settings as SettingsIcon, Mic2, CalendarDays, CreditCard, Mail, Lock, Users as UsersIcon, Crown, Download, Info, Save, ShieldCheck, Smartphone, Laptop, Database, AlertTriangle } from "lucide-react";
-import { useState } from "react";
+import { Settings as SettingsIcon, Mic2, CalendarDays, CreditCard, Mail, Lock, Users as UsersIcon, Crown, Download, Info, Save, ShieldCheck, Smartphone, Laptop, Database, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
@@ -86,9 +86,43 @@ function SettingsPage() {
   const [emailAlerts, setEmailAlerts] = useState(settings.notifications.emailAlerts);
   const [systemAlerts, setSystemAlerts] = useState(settings.notifications.systemAlerts);
 
+  useEffect(() => {
+    if (dirty) return;
+    setStudioName(settings.studio.name);
+    setTagline(settings.studio.tagline);
+    setDescription(settings.studio.description);
+    setEmail(settings.studio.email);
+    setPhone(settings.studio.phone);
+    setWebsite(settings.studio.website);
+    setAddress(settings.studio.address);
+    setLanguage(settings.localization.language);
+    setTimezone(settings.localization.timezone);
+    setDateFormat(settings.localization.dateFormat);
+    setTimeFormat(settings.localization.timeFormat);
+    setDefaultStatus(settings.booking.defaultStatus);
+    setAutoPublish(settings.booking.autoPublish);
+    setRequireApproval(settings.booking.requireApproval);
+    setBufferTime(settings.booking.bufferTime);
+    setLiveStreaming(settings.booking.liveStreaming);
+    setVideoRecording(settings.booking.videoRecording);
+    setGuestUploads(settings.booking.guestUploads);
+    setPublicProfile(settings.booking.publicProfile);
+    setCurrency(settings.payment.currency);
+    setTaxRate(settings.payment.taxRate);
+    setStripeEnabled(settings.payment.stripeEnabled);
+    setPaypalEnabled(settings.payment.paypalEnabled);
+    setEmailAlerts(settings.notifications.emailAlerts);
+    setSystemAlerts(settings.notifications.systemAlerts);
+  }, [settings, dirty]);
+
   // Security tab states
   const [twoFactor, setTwoFactor] = useState(true);
   const [passwordForm, setPasswordForm] = useState({ old: "", newpwd: "", confirm: "" });
+  const [showSecurityPasswords, setShowSecurityPasswords] = useState({
+    old: false,
+    newpwd: false,
+    confirm: false,
+  });
   const [sessions, setSessions] = useState([
     { id: "s1", device: "Windows PC", browser: "Chrome Browser", location: "Mumbai, India", ip: "103.220.198.45", current: true, time: "Current Session" },
     { id: "s2", device: "Apple iPhone 15", browser: "Safari Browser", location: "Pune, India", ip: "103.45.21.90", current: false, time: "Active 2 hours ago" },
@@ -183,6 +217,38 @@ function SettingsPage() {
   };
 
   const markDirty = () => setDirty(true);
+
+  const PasswordInput = ({
+    id,
+    label,
+    field,
+  }: {
+    id: string;
+    label: string;
+    field: "old" | "newpwd" | "confirm";
+  }) => (
+    <Field label={label}>
+      <div className="relative">
+        <input
+          id={id}
+          type={showSecurityPasswords[field] ? "text" : "password"}
+          value={passwordForm[field]}
+          onChange={(e) => setPasswordForm(prev => ({ ...prev, [field]: e.target.value }))}
+          className="h-10 w-full rounded-lg border border-border bg-card px-3 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+          title={label}
+        />
+        <button
+          type="button"
+          onClick={() => setShowSecurityPasswords((prev) => ({ ...prev, [field]: !prev[field] }))}
+          className="absolute right-2 top-1/2 -translate-y-1/2 size-7 rounded-md grid place-items-center text-muted-foreground hover:bg-muted"
+          title={showSecurityPasswords[field] ? "Hide password" : "Show password"}
+          aria-label={showSecurityPasswords[field] ? "Hide password" : "Show password"}
+        >
+          {showSecurityPasswords[field] ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </button>
+      </div>
+    </Field>
+  );
 
   const renderGeneral = () => (
     <div className="space-y-8 mt-4">
@@ -306,14 +372,15 @@ function SettingsPage() {
 
   const renderBookingSettings = () => (
     <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-      <Card title="Booking Process Preferences" desc="Define basic studio scheduling controls.">
+      <Card title="Booking & Episode Defaults" desc="Defaults used when new bookings or episodes are created. Existing records are not changed.">
         <div className="space-y-4">
-          <Field label="Default Episode Status">
+          <Field label="Default New Episode Status">
             <select value={defaultStatus} onChange={(e) => { setDefaultStatus(e.target.value); markDirty(); }} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none" title="Default status">
               <option>Draft</option>
               <option>Published</option>
               <option>Scheduled</option>
             </select>
+            <div className="text-[10px] text-muted-foreground mt-1">Used by the Add New Episode form only. Existing episodes keep their current status.</div>
           </Field>
           <Field label="Booking Buffer Duration">
             <select value={bufferTime} onChange={(e) => { setBufferTime(e.target.value); markDirty(); }} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none" title="Buffer time">
@@ -325,7 +392,7 @@ function SettingsPage() {
           <div className="flex items-center justify-between py-2 border-b border-border">
             <div>
               <div className="text-sm font-medium">Auto Publish</div>
-              <div className="text-xs text-muted-foreground">Automatically publish scheduled episodes</div>
+              <div className="text-xs text-muted-foreground">Preference stored for future publish workflows</div>
             </div>
             <Toggle on={autoPublish} onChange={() => { setAutoPublish(!autoPublish); markDirty(); }} />
           </div>
@@ -466,16 +533,10 @@ function SettingsPage() {
         <div className="lg:col-span-2 space-y-6">
           <Card title="Update Password" desc="Change administrator credentials regularly to prevent unauthorized dashboard access.">
             <form onSubmit={(e) => { e.preventDefault(); toast.success("Password updated successfully!"); setPasswordForm({ old: "", newpwd: "", confirm: "" }); }} className="space-y-3">
-              <Field label="Current Password">
-                <input type="password" value={passwordForm.old} onChange={(e) => setPasswordForm(prev => ({ ...prev, old: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" title="Current Password" />
-              </Field>
+              <PasswordInput id="current-password" label="Current Password" field="old" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="New Password">
-                  <input type="password" value={passwordForm.newpwd} onChange={(e) => setPasswordForm(prev => ({ ...prev, newpwd: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" title="New Password" />
-                </Field>
-                <Field label="Confirm New Password">
-                  <input type="password" value={passwordForm.confirm} onChange={(e) => setPasswordForm(prev => ({ ...prev, confirm: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" title="Confirm Password" />
-                </Field>
+                <PasswordInput id="new-password" label="New Password" field="newpwd" />
+                <PasswordInput id="confirm-password" label="Confirm New Password" field="confirm" />
               </div>
               <button type="submit" className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-semibold text-xs transition-opacity hover:opacity-90 cursor-pointer">Change Password</button>
             </form>
@@ -669,7 +730,7 @@ function SettingsPage() {
       {activeTab === "Team" && renderTeam()}
 
       <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
-        <span className="inline-flex items-center gap-2"><Info className="size-4" /> Click "Save Changes" at the top right to persist localization and system configurations.</span>
+        <span className="inline-flex items-center gap-2"><Info className="size-4" /> Click "Save Changes" at the top right to persist settings. Defaults apply to new records only.</span>
         <span>Last updated: Today, by Admin</span>
       </div>
     </DashboardLayout>

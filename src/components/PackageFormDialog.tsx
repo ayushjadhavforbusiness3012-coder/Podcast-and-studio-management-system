@@ -4,6 +4,7 @@ import { useAppContext, type Package, type Addon } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { AddonFormDialog } from "./AddonFormDialog";
 import { Clock, Video, Headphones, Sparkles, Mic, Camera, Music, Plus, Pencil, Trash2 } from "lucide-react";
+import { currencySymbol, formatCurrency } from "@/lib/money";
 
 const iconOptions = ["Star", "Crown", "Zap", "Diamond", "Building2", "InfinityIcon"] as const;
 const colorOptions = ["bg-primary", "bg-info", "bg-success", "bg-warning", "bg-destructive"] as const;
@@ -21,7 +22,8 @@ export function PackageFormDialog({
   packageToEdit?: Package;
   initialPackage?: Omit<Package, "id">;
 }) {
-  const { addPackage, updatePackage, addons, deleteAddon } = useAppContext();
+  const { addPackage, updatePackage, addons, deleteAddon, settings } = useAppContext();
+  const moneySymbol = currencySymbol(settings.payment.currency);
 
   const [iconName, setIconName] = useState<Package["iconName"]>("Star");
   const [color, setColor] = useState<string>("bg-primary");
@@ -30,7 +32,7 @@ export function PackageFormDialog({
   const [cat, setCat] = useState("Basic");
   const [catV, setCatV] = useState("primary");
   const [dur, setDur] = useState("1 Hour");
-  const [price, setPrice] = useState("₹0");
+  const [price, setPrice] = useState(() => formatCurrency(0));
   const [extra, setExtra] = useState("+ more");
   const [bookings, setBookings] = useState(0);
   const [popular, setPopular] = useState(false);
@@ -82,7 +84,7 @@ export function PackageFormDialog({
       setCat("Basic");
       setCatV("primary");
       setDur("1 Hour");
-      setPrice("₹0");
+      setPrice(formatCurrency(0, moneySymbol));
       setExtra("+ more");
       setBookings(0);
       setPopular(false);
@@ -90,7 +92,7 @@ export function PackageFormDialog({
       setSelectedAddonIds([]);
       setCustomHours(1);
     }
-  }, [open, packageToEdit, initialPackage, addons]);
+  }, [open, packageToEdit, initialPackage, addons, moneySymbol]);
 
   useEffect(() => {
     if (isCustom && open) {
@@ -98,9 +100,9 @@ export function PackageFormDialog({
         .filter((a) => selectedAddonIds.includes(a.id))
         .reduce((sum, a) => sum + a.price, 0);
       const calculated = 2000 + (customHours - 1) * 1500 + addonCost;
-      setPrice(`₹${calculated.toLocaleString()}`);
+      setPrice(formatCurrency(calculated, moneySymbol));
     }
-  }, [customHours, selectedAddonIds, isCustom, addons, open]);
+  }, [customHours, selectedAddonIds, isCustom, addons, open, moneySymbol]);
 
   const handleAddFeature = () => {
     if (!featureInput.trim()) return;
@@ -266,7 +268,7 @@ export function PackageFormDialog({
                   className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  placeholder="₹0"
+                  placeholder={`${moneySymbol}0`}
                   title="Package Price"
                 />
                 {isCustom && (
@@ -295,7 +297,7 @@ export function PackageFormDialog({
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <label htmlFor="custom-duration-slider" className="text-sm font-medium">Session Duration: {customHours} Hour{customHours > 1 ? "s" : ""}</label>
-                    <span className="text-xs text-muted-foreground">₹2,000 base + ₹1,500/extra hour</span>
+                    <span className="text-xs text-muted-foreground">{formatCurrency(2000, moneySymbol)} base + {formatCurrency(1500, moneySymbol)}/extra hour</span>
                   </div>
                   <input
                     id="custom-duration-slider"
@@ -353,7 +355,7 @@ export function PackageFormDialog({
                             </label>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-muted-foreground">₹{addon.price.toLocaleString()}</span>
+                            <span className="text-xs font-semibold text-muted-foreground">{formatCurrency(addon.price, moneySymbol)}</span>
                             <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity ml-2">
                               <button
                                 type="button"
@@ -392,17 +394,6 @@ export function PackageFormDialog({
             )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="package-extra">Extra label</label>
-                <input
-                  id="package-extra"
-                  className="w-full h-10 px-3 rounded-md border border-border bg-background text-sm"
-                  value={extra}
-                  onChange={(e) => setExtra(e.target.value)}
-                  placeholder="+ more"
-                  title="Extra label"
-                />
-              </div>
               <div className="space-y-2 flex flex-col justify-end">
                 <label className="text-sm font-medium mb-2">Popular package</label>
                 <div className="flex items-center gap-3 h-10">

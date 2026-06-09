@@ -6,6 +6,7 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { GuestFormDialog } from "@/components/GuestFormDialog";
 import { GuestDetailsDialog } from "@/components/GuestDetailsDialog";
+import { BookingFormDialog } from "@/components/BookingFormDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/guests")({
@@ -14,11 +15,13 @@ export const Route = createFileRoute("/guests")({
 });
 
 function Guests() {
-  const { guests, deleteGuest, deleteGuests } = useAppContext();
+  const { guests, deleteGuest } = useAppContext();
   
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
+  const [bookingGuestName, setBookingGuestName] = useState("");
+  const [bookingOpen, setBookingOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   
   const [tempStatus, setTempStatus] = useState("All Status");
@@ -30,8 +33,6 @@ function Guests() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
   const handleEdit = (g: Guest) => {
     setSelectedGuest(g);
     setFormOpen(true);
@@ -47,11 +48,9 @@ function Guests() {
     setFormOpen(true);
   };
 
-  const handleToggleSelect = (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedIds(next);
+  const handleBookGuest = (g: Guest) => {
+    setBookingGuestName(g.name);
+    setBookingOpen(true);
   };
 
   const filteredGuests = useMemo(() => {
@@ -84,13 +83,13 @@ function Guests() {
     return filteredGuests.slice(start, start + itemsPerPage);
   }, [filteredGuests, currentPage, itemsPerPage]);
 
-  const handleToggleAll = () => {
-    if (selectedIds.size === filteredGuests.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredGuests.map(g => g.id)));
-    }
-  };
+  const newGuestsThisMonth = useMemo(() => {
+    const now = new Date();
+    return guests.filter((guest) => {
+      const date = new Date(guest.date);
+      return !Number.isNaN(date.getTime()) && date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    }).length;
+  }, [guests]);
 
   const handleApplyFilters = () => {
     setStatusFilter(tempStatus);
@@ -105,16 +104,8 @@ function Guests() {
     setStatusFilter("All Status");
     setDateFilter("");
     setSearchQuery("");
-    setSelectedIds(new Set());
     setCurrentPage(1);
     toast.info("Filters reset");
-  };
-
-  const handleDeleteSelected = () => {
-    if (selectedIds.size === 0) return;
-    deleteGuests(Array.from(selectedIds));
-    toast.success(`${selectedIds.size} guests deleted`);
-    setSelectedIds(new Set());
   };
 
   const handleExport = () => {
@@ -139,11 +130,6 @@ function Guests() {
               }}
             />
           </div>
-          {selectedIds.size > 0 && (
-            <button onClick={handleDeleteSelected} className="h-10 px-4 rounded-lg border border-destructive/30 text-destructive bg-destructive/10 text-sm font-medium inline-flex items-center gap-2">
-              <Trash2 className="size-4" /> Delete Selected ({selectedIds.size})
-            </button>
-          )}
           <button onClick={handleExport} className="h-10 px-4 rounded-lg border border-border bg-card text-sm font-medium inline-flex items-center gap-2">
             <Download className="size-4" /> Export
           </button>
@@ -154,11 +140,11 @@ function Guests() {
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        <StatCard icon={Users} label="Total Guests" value={guests.length.toString()} trend="↑ 15% from last month" tone="primary" />
-        <StatCard icon={CheckCircle2} label="Active Guests" value={guests.filter(g => g.status === "Active").length.toString()} trend="84% of total" tone="success" />
-        <StatCard icon={UserPlus} label="New This Month" value="24" trend="↑ 20%" tone="warning" />
-        <StatCard icon={CalendarPlus} label="Total Bookings" value={guests.reduce((acc, g) => acc + g.bookings, 0).toString()} trend="↑ 18% from last month" tone="info" />
-        <StatCard icon={Star} label="Frequent Guests" value={guests.filter(g => g.bookings >= 3).length.toString()} trend="16% of total" tone="pink" />
+        <StatCard icon={Users} label="Total Guests" value={guests.length.toString()} trend="All local records" tone="primary" />
+        <StatCard icon={CheckCircle2} label="Active Guests" value={guests.filter(g => g.status === "Active").length.toString()} trend="Currently active" tone="success" />
+        <StatCard icon={UserPlus} label="New This Month" value={newGuestsThisMonth.toString()} trend="From guest dates" tone="warning" />
+        <StatCard icon={CalendarPlus} label="Total Bookings" value={guests.reduce((acc, g) => acc + g.bookings, 0).toString()} trend="Guest booking count" tone="info" />
+        <StatCard icon={Star} label="Frequent Guests" value={guests.filter(g => g.bookings >= 3).length.toString()} trend="3+ bookings" tone="pink" />
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-5">
@@ -211,16 +197,6 @@ function Guests() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground">
               <tr>
-                <th className="p-4 text-left">
-                  <input 
-                    type="checkbox" 
-                    checked={selectedIds.size === filteredGuests.length && filteredGuests.length > 0}
-                    onChange={handleToggleAll}
-                    className="size-4 rounded border-border"
-                    title="Select all guests"
-                    aria-label="Select all guests"
-                  />
-                </th>
                 <th className="p-4 text-left font-medium">Guest</th>
                 <th className="p-4 text-left font-medium">Email / Phone</th>
                 <th className="p-4 text-left font-medium">Expertise / Topic</th>
@@ -232,17 +208,7 @@ function Guests() {
             </thead>
             <tbody>
               {paginatedGuests.map((g) => (
-                <tr key={g.id} className={`border-t border-border transition-colors ${selectedIds.has(g.id) ? "bg-primary/5" : "hover:bg-muted/30"}`}>
-                  <td className="p-4">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedIds.has(g.id)}
-                      onChange={() => handleToggleSelect(g.id)}
-                      className="size-4 rounded border-border"
-                      title={`Select guest ${g.name}`}
-                      aria-label={`Select guest ${g.name}`}
-                    />
-                  </td>
+                <tr key={g.id} className="border-t border-border transition-colors hover:bg-muted/30">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <img src={`https://i.pravatar.cc/64?img=${g.img}`} className="size-10 rounded-full object-cover" alt="" />
@@ -260,6 +226,7 @@ function Guests() {
                   <td className="p-4">
                     <div className="flex gap-1">
                       <button onClick={() => handleView(g)} className="size-8 rounded-md border border-border grid place-items-center text-info hover:bg-info/10 transition-colors cursor-pointer" title="View details" aria-label="View details"><Eye className="size-4" /></button>
+                      <button onClick={() => handleBookGuest(g)} className="h-8 px-3 rounded-md border border-border text-xs font-medium text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="Book guest" aria-label="Book guest">Book</button>
                       <button onClick={() => handleEdit(g)} className="size-8 rounded-md border border-border grid place-items-center text-warning-foreground hover:bg-warning/10 transition-colors cursor-pointer" title="Edit guest" aria-label="Edit guest"><Pencil className="size-4" /></button>
                       <button onClick={() => { if (window.confirm("Are you sure you want to delete this guest?")) { deleteGuest(g.id); toast.success("Guest deleted"); } }} className="size-8 rounded-md border border-border grid place-items-center text-destructive hover:bg-destructive/10 transition-colors cursor-pointer" title="Delete guest" aria-label="Delete guest"><Trash2 className="size-4" /></button>
                     </div>
@@ -304,6 +271,7 @@ function Guests() {
       
       <GuestFormDialog open={formOpen} onOpenChange={setFormOpen} guestToEdit={selectedGuest || undefined} />
       <GuestDetailsDialog open={detailsOpen} onOpenChange={setDetailsOpen} guest={selectedGuest} />
+      <BookingFormDialog open={bookingOpen} onOpenChange={setBookingOpen} defaultGuest={bookingGuestName} />
 
       {/* Export Guests Dialog */}
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
@@ -331,10 +299,7 @@ function Guests() {
               onClick={() => {
                 setExportOpen(false);
                 
-                // If there are selectedIds, we export only those. Otherwise, export filteredGuests
-                const guestsToExport = selectedIds.size > 0 
-                  ? guests.filter(g => selectedIds.has(g.id))
-                  : filteredGuests;
+                const guestsToExport = filteredGuests;
 
                 let csvContent = "data:text/csv;charset=utf-8," 
                   + "Guest ID,Name,Phone,Email,Topic,Status,Date Joined,Total Bookings\n";

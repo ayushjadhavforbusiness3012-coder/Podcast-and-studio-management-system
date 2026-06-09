@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Booking {
+  id        String   @id
+  guest     String
+  studio    String
+  pkg       String
+  date      String
+  time      String
+  status    String
+  sv        String
+  amt       String
+  paymentStatus String @default("Unpaid")
+  paidAmount String @default("₹0")
+  duration  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Guest {
+  id        String   @id
+  name      String
+  phone     String
+  email     String
+  topic     String
+  status    String
+  date      String
+  bookings  Int      @default(0)
+  img       Int      @default(12)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Episode {
+  id        String   @id
+  ep        String
+  title     String
+  show      String
+  guest     String
+  img       Int
+  dur       String
+  status    String
+  sv        String
+  date      String
+  publishedDate String @default("")
+  time      String
+  color     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Invoice {
+  id        String   @id
+  name      String
+  email     String
+  show      String
+  date      String
+  due       String
+  amount    String
+  paidAmount String @default("₹0")
+  status    String
+  img       Int
+  bar       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudioPackage {
+  id        String   @id
+  iconName  String
+  color     String
+  name      String
+  desc      String
+  cat       String
+  catV      String
+  dur       String
+  price     String
+  features  String[] @default([])
+  extra     String
+  bookings  Int      @default(0)
+  popular   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Addon {
+  id        String   @id
+  name      String
+  price     Int
+  iconName  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppUser {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      String
+  roleV     String
+  status    String
+  joined    String
+  last      String
+  img       Int
+  you       Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id
+  iconName  String
+  color     String
+  title     String
+  unread    Boolean  @default(true)
+  category  String
+  createdAt DateTime
+}
+
+model StudioSettings {
+  id          String @id @default("default")
+  name        String
+  tagline     String
+  description String
+  email       String
+  phone       String
+  website     String
+  address     String
+  logoUrl     String?
+}
+
+model LocalizationSettings {
+  id         String @id @default("default")
+  language   String
+  timezone   String
+  dateFormat String
+  timeFormat String
+}
+
+model BookingSettings {
+  id              String  @id @default("default")
+  defaultStatus   String
+  autoPublish     Boolean
+  requireApproval Boolean
+  bufferTime      String
+  liveStreaming   Boolean
+  videoRecording  Boolean
+  guestUploads    Boolean
+  publicProfile   Boolean
+}
+
+model PaymentSettings {
+  id            String  @id @default("default")
+  currency      String
+  taxRate       Int
+  stripeEnabled Boolean
+  paypalEnabled Boolean
+}
+
+model NotificationSettings {
+  id           String  @id @default("default")
+  emailAlerts  Boolean
+  systemAlerts Boolean
+}
+
+model AdminProfile {
+  id          String  @id @default("default")
+  name        String
+  email       String
+  avatarIndex Int
+  role        String
+  bio         String?
+}
