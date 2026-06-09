@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { type Booking } from "@/contexts/AppContext";
 import { Badge } from "@/components/DashboardLayout";
+import { shouldHideBookingPayment } from "@/lib/booking-display";
 
 export function BookingDetailsDialog({
   booking,
@@ -12,9 +13,7 @@ export function BookingDetailsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   if (!booking) return null;
-  const shouldHidePayment =
-    (booking.status === "Cancelled" && booking.paymentStatus === "Refunded")
-    || (booking.status === "Completed" && booking.paymentStatus === "Paid");
+  const shouldHidePayment = shouldHideBookingPayment(booking);
   const paymentVariant: Record<string, any> = {
     Unpaid: "warning",
     "Partially Paid": "info",

@@ -6,6 +6,7 @@ import { useAppContext, type Booking } from "@/contexts/AppContext";
 import { BookingFormDialog } from "@/components/BookingFormDialog";
 import { BookingDetailsDialog } from "@/components/BookingDetailsDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { shouldHideBookingPayment } from "@/lib/booking-display";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 
@@ -19,11 +20,11 @@ function CalendarPage() {
   
   const [formOpen, setFormOpen] = useState(false);
   const [selectedDateForModal, setSelectedDateForModal] = useState("");
-  const [selectedBookingForForm, setSelectedBookingForForm] = useState<Booking | undefined>(undefined);
+  const [selectedBookingForFormId, setSelectedBookingForFormId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
+  const [selectedBookingForDetailsId, setSelectedBookingForDetailsId] = useState<string | null>(null);
   const [dayDetailsOpen, setDayDetailsOpen] = useState(false);
-  const [selectedDayBookings, setSelectedDayBookings] = useState<Booking[]>([]);
+  const [selectedDayBookingIds, setSelectedDayBookingIds] = useState<string[]>([]);
 
   // Real-time system machine date anchor (June 2026 based on metadata system time)
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -36,6 +37,15 @@ function CalendarPage() {
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+  const selectedBookingForForm = selectedBookingForFormId
+    ? bookings.find((booking) => booking.id === selectedBookingForFormId)
+    : undefined;
+  const selectedBookingForDetails = selectedBookingForDetailsId
+    ? bookings.find((booking) => booking.id === selectedBookingForDetailsId) ?? null
+    : null;
+  const selectedDayBookings = selectedDayBookingIds
+    .map((id) => bookings.find((booking) => booking.id === id))
+    .filter((booking): booking is Booking => Boolean(booking));
 
   // Navigation handlers
   const handlePrevMonth = () => {
@@ -131,7 +141,7 @@ function CalendarPage() {
   const handleCellClick = (cellDate: Date) => {
     const formatted = cellDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
     setSelectedDateForModal(formatted);
-    setSelectedDayBookings(getFilteredBookingsForCell(cellDate));
+    setSelectedDayBookingIds(getFilteredBookingsForCell(cellDate).map((booking) => booking.id));
     setDayDetailsOpen(true);
   };
 
@@ -288,7 +298,7 @@ function CalendarPage() {
           <button 
             onClick={() => {
               setSelectedDateForModal("");
-              setSelectedBookingForForm(undefined);
+              setSelectedBookingForFormId(null);
               setFormOpen(true);
             }} 
             className="w-full h-11 rounded-lg bg-primary text-primary-foreground font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
@@ -414,7 +424,7 @@ function CalendarPage() {
         open={formOpen} 
         onOpenChange={(open) => {
           setFormOpen(open);
-          if (!open) setSelectedBookingForForm(undefined);
+          if (!open) setSelectedBookingForFormId(null);
         }}
         defaultDate={selectedDateForModal}
         bookingToEdit={selectedBookingForForm}
@@ -436,12 +446,14 @@ function CalendarPage() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <Badge variant={booking.sv}>{booking.status}</Badge>
-                  <Badge variant={booking.paymentStatus === "Paid" ? "success" : booking.paymentStatus === "Partially Paid" ? "info" : booking.paymentStatus === "Refunded" ? "destructive" : "warning"}>{booking.paymentStatus}</Badge>
+                  {!shouldHideBookingPayment(booking) && (
+                    <Badge variant={booking.paymentStatus === "Paid" ? "success" : booking.paymentStatus === "Partially Paid" ? "info" : booking.paymentStatus === "Refunded" ? "destructive" : "warning"}>{booking.paymentStatus}</Badge>
+                  )}
                   <div className="flex gap-1 pt-1">
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedBookingForDetails(booking);
+                        setSelectedBookingForDetailsId(booking.id);
                         setDetailsOpen(true);
                       }}
                       className="size-7 rounded-md border border-border grid place-items-center text-info hover:bg-info/10"
@@ -453,7 +465,7 @@ function CalendarPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedBookingForForm(booking);
+                        setSelectedBookingForFormId(booking.id);
                         setDayDetailsOpen(false);
                         setFormOpen(true);
                       }}
@@ -474,7 +486,7 @@ function CalendarPage() {
           <button
             onClick={() => {
               setDayDetailsOpen(false);
-              setSelectedBookingForForm(undefined);
+              setSelectedBookingForFormId(null);
               setFormOpen(true);
             }}
             className="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90"

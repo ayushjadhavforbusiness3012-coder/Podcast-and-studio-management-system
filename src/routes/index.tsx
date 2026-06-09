@@ -16,8 +16,7 @@ import {
   Mic2,
   FileText,
   BellRing,
-  UserPlus,
-  ShieldAlert
+  UserPlus
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -51,6 +50,14 @@ export const Route = createFileRoute("/")({
 });
 
 const studioColors = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#14b8a6"];
+const studioBgClasses = [
+  "bg-[#8b5cf6]",
+  "bg-[#3b82f6]",
+  "bg-[#10b981]",
+  "bg-[#f59e0b]",
+  "bg-[#ef4444]",
+  "bg-[#14b8a6]"
+];
 
 function parseRecordDate(dateStr: string) {
   if (!dateStr || dateStr === "—" || dateStr === "â€”") return null;
@@ -161,12 +168,16 @@ function Dashboard() {
       return acc;
     }, {});
 
-    return Object.entries(counts).map(([name, count], index) => ({
-      name,
-      count,
-      value: bookings.length > 0 ? Math.round((count / bookings.length) * 100) : 0,
-      color: studioColors[index % studioColors.length],
-    }));
+    return Object.entries(counts).map(([name, count], index) => {
+      const colorIndex = index % studioColors.length;
+      return {
+        name,
+        count,
+        value: bookings.length > 0 ? Math.round((count / bookings.length) * 100) : 0,
+        color: studioColors[colorIndex],
+        bgClass: studioBgClasses[colorIndex],
+      };
+    });
   }, [bookings]);
 
   // Dynamic years dropdown starting from genesis year 2026
@@ -363,7 +374,7 @@ function Dashboard() {
             {studioData.map((s) => (
               <div key={s.name} className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 font-medium text-foreground">
-                  <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className={`size-2 rounded-full ${s.bgClass}`} />
                   {s.name}
                 </span>
                 <span className="font-bold text-foreground">{s.count} ({s.value}%)</span>

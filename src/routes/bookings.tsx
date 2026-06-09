@@ -22,6 +22,7 @@ import { useAppContext, type Booking } from "@/contexts/AppContext";
 import { BookingFormDialog } from "@/components/BookingFormDialog";
 import { BookingDetailsDialog } from "@/components/BookingDetailsDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { shouldHideBookingPayment } from "@/lib/booking-display";
 import { useState, useMemo } from "react";
 
 
@@ -35,7 +36,7 @@ function Bookings() {
   
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
 
   // Filter Bar draft state
@@ -51,19 +52,20 @@ function Bookings() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+  const selectedBooking = selectedBookingId ? bookings.find((booking) => booking.id === selectedBookingId) ?? null : null;
   
   const handleEdit = (b: Booking) => {
-    setSelectedBooking(b);
+    setSelectedBookingId(b.id);
     setFormOpen(true);
   };
   
   const handleView = (b: Booking) => {
-    setSelectedBooking(b);
+    setSelectedBookingId(b.id);
     setDetailsOpen(true);
   };
   
   const handleNew = () => {
-    setSelectedBooking(null);
+    setSelectedBookingId(null);
     setFormOpen(true);
   };
 
@@ -277,6 +279,7 @@ function Bookings() {
             <tbody>
               {paginatedBookings.map((r) => {
                 const payStatus = getPaymentStatus(r.paymentStatus);
+                const hidePayment = shouldHideBookingPayment(r);
                 
                 // Set color indicator on the left side of the row cell block
                 let statusBorderClass = "border-l-4 border-l-transparent";
@@ -300,10 +303,18 @@ function Bookings() {
                     <td className="p-4">
                       <Badge variant={r.sv}>{r.status}</Badge>
                     </td>
-                    <td className="p-4 font-semibold text-foreground">{r.amt}</td>
+                    <td className="p-4 font-semibold text-foreground">
+                      {hidePayment ? <span className="text-muted-foreground">Hidden</span> : r.amt}
+                    </td>
                     <td className="p-4">
-                      <Badge variant={payStatus.var as any}>{payStatus.label}</Badge>
-                      <div className="text-[10px] text-muted-foreground mt-1">Paid {r.paidAmount}</div>
+                      {hidePayment ? (
+                        <span className="text-xs text-muted-foreground">Finalized</span>
+                      ) : (
+                        <>
+                          <Badge variant={payStatus.var as any}>{payStatus.label}</Badge>
+                          <div className="text-[10px] text-muted-foreground mt-1">Paid {r.paidAmount}</div>
+                        </>
+                      )}
                     </td>
                     <td className="p-4">
                       <div className="flex gap-1">
@@ -380,7 +391,10 @@ function Bookings() {
       
       <BookingFormDialog 
         open={formOpen} 
-        onOpenChange={setFormOpen} 
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setSelectedBookingId(null);
+        }}
         bookingToEdit={selectedBooking || undefined} 
       />
       <BookingDetailsDialog 
